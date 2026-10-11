@@ -344,15 +344,19 @@
   .dbullets{margin:0; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6;}
   .dbullets li{margin-bottom:2px;}
 
-  /* short/long-term way-forward */
-  .wf-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
-  @media (max-width:700px){ .wf-grid{grid-template-columns:1fr;} }
-  .wf-card{border-radius:11px; padding:14px 16px; border:1px solid var(--border);}
-  .wf-card.short{background:var(--warn-bg); border-color:#E8C3A4;}
-  .wf-card.long{background:var(--wf-long-bg); border-color:var(--wf-long-border);}
-  .wf-card h4{font-size:12px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; margin-bottom:8px;}
-  .wf-card.short h4{color:var(--warn);} .wf-card.long h4{color:var(--badge-accent-text);}
-  .wf-card ul{margin:0; padding-left:16px; font-size:12.5px; line-height:1.6;}
+  /* Attention Snapshot (Overview) -- ring + clickable chips, each chip/slice
+     jumps straight to the tab that holds the full detail behind it. Replaces
+     the older short/long-term "Where Track Machines Need to Improve" wall of
+     text (09-Oct-2026 per the user: too much text on Overview, show a quick
+     visual snapshot instead and send people to the relevant tab for detail). */
+  .att-wrap{display:flex; gap:26px; align-items:center; flex-wrap:wrap;}
+  .att-ring{flex:0 0 210px; width:210px; max-width:100%;}
+  .att-chips{flex:1 1 320px; display:flex; flex-wrap:wrap; align-content:flex-start; gap:8px;}
+  .att-chip{display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border-radius:999px; border:1px solid var(--border); background:var(--surface); cursor:pointer; font-size:12.5px; font-weight:600; color:var(--text); transition:border-color .15s, background .15s;}
+  .att-chip:hover{background:var(--surface-2); border-color:var(--steel-2);}
+  .att-chip .dot{width:9px; height:9px; border-radius:50%; flex:none;}
+  .att-chip .n{font-family:var(--mono); font-weight:700; margin-left:1px;}
+  @media (max-width:700px){ .att-wrap{flex-direction:column; align-items:stretch;} .att-ring{width:100%; max-width:280px; margin:0 auto;} }
 
   /* YoY comparison */
   .yoy-row{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
@@ -643,9 +647,12 @@
 
     <div class="card">
       <div class="cardhead">
-        <div><h3>Where Track Machines Need to Improve</h3><div class="cap">Data-driven way-forward, short-term and long-term &bull; derived from today's exceptions and the Apr&ndash;Sep shortfall log</div></div>
+        <div><h3>Attention Snapshot</h3><div class="cap">Items worth a look today, by area &bull; click the ring or a chip to open that tab for the full detail</div></div>
       </div>
-      <div class="wf-grid" id="wfGrid"></div>
+      <div class="att-wrap">
+        <div class="att-ring" id="attRing"></div>
+        <div class="att-chips" id="attChips"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -3134,7 +3141,7 @@ function setupFleetTable(){
 function drawOverviewCharts(){
   setupSrdenSections();
   renderSourceSheetGrid();
-  renderWayForward();
+  renderAttentionSnapshot();
 }
 
 // ---------------------------------------------------------------------
@@ -3583,101 +3590,91 @@ function drawExceptionsCharts(){
 // Fleet-driven bullets, only when that tab's data actually has something to
 // flag -- never a placeholder when a source sheet is empty or missing.
 // ---------------------------------------------------------------------
-function renderWayForward(){
-  const grid = document.getElementById('wfGrid');
-  if (!grid) return;
+// Jumps to another tab exactly as if its nav button were clicked -- reuses
+// the single #tabNav click listener (module show/hide + redraw) rather than
+// duplicating that logic here.
+function goToModule(mod){
+  const btn = document.querySelector('#tabNav button[data-mod="'+mod+'"]');
+  if (btn) btn.click();
+}
 
-  // ---- Short-Term: Sr.DEN-wise (this month) ----
+// ---------------------------------------------------------------------
+// Overview "Attention Snapshot" (replaced the old "Where Track Machines Need
+// to Improve" short/long-term text digest on 09-Oct-2026 per the user: too
+// much reading on Overview -- show a quick visual instead, each slice/chip
+// jumping straight to the tab that already carries the full detail behind
+// it, rather than restating that detail as paragraphs here).
+// ---------------------------------------------------------------------
+function renderAttentionSnapshot(){
+  const ringEl = document.getElementById('attRing');
+  const chipsEl = document.getElementById('attChips');
+  if (!ringEl || !chipsEl) return;
+
+  // Sr.DEN jurisdictions carrying an open non-productive shortfall concern this
+  // period -- a jurisdiction count (not a raw entry-count, which runs into the
+  // hundreds and would swamp every other, much smaller category below in the
+  // ring below out of all proportion to how "big" each concern actually is).
   const bundle = DATA.shortfall.srdenBundle||{};
-  const bundleRows = Object.values(bundle).map(b=>{
-    const nonProd = (b.topCategories||[]).filter(([k])=>k!=='Productive Work - Full Progress');
-    const total = nonProd.reduce((s,[,v])=>s+v,0);
-    return {...b, nonProd, total};
-  }).sort((a,b)=>b.total-a.total);
-  const shortTerm = bundleRows.slice(0,6).map(b=>{
-    const top = b.nonProd[0];
-    if (!top) return null;
-    const topMachine = (b.machineShortfalls||[])[0];
-    const machTxt = topMachine ? ` — worst-affected machine there is <b>${esc(topMachine[0])}</b>` : '';
-    return `<b>${esc(b.key)}</b> (${b.machineCount} machines): clear &ldquo;${esc(top[0])}&rdquo; (${top[1]} entries this period)${machTxt}. Raise this by name in this week's Sr.DEN call.`;
-  }).filter(Boolean);
-  if (!shortTerm.length) shortTerm.push('No open Sr.DEN-level shortfall entries this period.');
+  const shortfallCount = Object.values(bundle).filter(b=>
+    (b.topCategories||[]).some(([k,v])=> k!=='Productive Work - Full Progress' && v>0)
+  ).length;
 
-  // Double-Shift Roster: jurisdictions with a >12h shift this period (staff fatigue risk).
+  // Double-Shift Roster: shifts over 12h this period (staff fatigue risk).
   const ds = (DATA.fleet||{}).doubleShift;
-  if (ds && (ds.over12hRecords||[]).length){
-    const bySrden = {};
-    ds.over12hRecords.forEach(r=>{ const k=r.srdenKey||'Unmapped'; (bySrden[k]=bySrden[k]||[]).push(r); });
-    const ranked = Object.entries(bySrden).sort((a,b)=>b[1].length-a[1].length);
-    const [worstKey, worstRecs] = ranked[0];
-    const otherCount = ranked.length - 1;
-    shortTerm.push(`Double-Shift Roster: <b>${esc(worstKey)}</b> had <b>${worstRecs.length}</b> shift(s) exceed 12 hours this period (worst: <b>${esc(worstRecs[0].machine)}</b>, ${worstRecs[0].durationHours}h)` +
-      (otherCount>0 ? ` — ${otherCount} more jurisdiction(s) also flagged` : '') +
-      ` — staff fatigue risk; review shift planning/relief arrangements.`);
-  }
+  const dsCount = ds ? (ds.over12hRecords||[]).length : 0;
 
-  // 53-Point Action Plan: points with no real update in 2+ review cycles.
+  // 53-Point Action Plan: points stalled or flagged nil-progress.
   const apIns = ((DATA.actionPlan53||{}).insights)||null;
-  if (apIns){
-    const stalled = apIns.stalledPoints||[], nil = apIns.flaggedNilPoints||[];
-    const worst = stalled[0] || nil[0];
-    const count = new Set([...stalled.map(p=>p.sno), ...nil.map(p=>p.sno)]).size;
-    if (worst && count){
-      shortTerm.push(`53-Point Action Plan: <b>${count}</b> action point(s) stalled or flagged nil-progress — e.g. S.No <b>${worst.sno}</b> (${esc(worst.category)}: &ldquo;${esc((worst.actionPoint||'').slice(0,70))}${(worst.actionPoint||'').length>70?'…':''}&rdquo;) needs a follow-up push this cycle.`);
-    }
-  }
+  const apCount = apIns ? new Set([...(apIns.stalledPoints||[]).map(p=>p.sno), ...(apIns.flaggedNilPoints||[]).map(p=>p.sno)]).size : 0;
 
-  // ---- Long-Term: Division-wise (next 1-2 quarters) ----
-  const overdueByDiv = {};
-  (DATA.fleet.iohPohOverdue||[]).forEach(o=>{ (overdueByDiv[o.division]=overdueByDiv[o.division]||[]).push(o); });
-  const longTerm = [...DATA.progress.divRollup].sort((a,b)=>a.pct-b.pct).map(d=>{
-    const divCats = Object.entries((DATA.shortfall.byDivCat||{})[d.div]||{}).filter(([k])=>k!=='Productive Work - Full Progress').sort((a,b)=>b[1]-a[1]);
-    const topCat = divCats[0];
-    const ov = overdueByDiv[d.div]||[];
-    const parts = [`<b>${esc(d.div)}</b> division is at <b>${fmtPct(d.pct)}</b> of pro-rata target across ${d.count} machines.`];
-    if (topCat) parts.push(`Structural constraint: <b>${esc(topCat[0])}</b> (${topCat[1]} entries) — plan a divisional-level fix over the next 1&ndash;2 quarters, not a one-off correction.`);
-    if (ov.length) parts.push(`<b>${ov.length}</b> machine(s) in this division are overdue for IOH/POH — build slot-booking capacity into the divisional plan ahead of further slippage.`);
-    return parts.join(' ');
-  });
-  const ab = DATA.fleet.ageBuckets;
-  const oldTotal = (ab['21-30 yrs']||0)+(ab['30+ yrs']||0);
-  if (oldTotal) longTerm.push(`Fleet-wide: <b>${oldTotal}</b> machines are over 20 years old — factor renewal/condemnation proposals into the multi-year capital plan alongside the divisional reviews above.`);
+  // Fleet Health: machines overdue for a scheduled IOH/POH.
+  const overdueCount = (DATA.fleet.iohPohOverdue||[]).length;
 
-  // Infrastructure Planning: TM sidings/rest houses still sanctioned/proposed, not yet available.
+  // Infrastructure Planning: TM sidings/rest houses sanctioned/proposed, not yet available.
   const infra = DATA.infra;
+  let infraCount = 0;
   if (infra && (infra.srdenTable||[]).length){
-    let pendingSidings=0, pendingRh=0, notFeasible=0;
     infra.srdenTable.forEach(row=>{
       const sid = row.sidingStatus||{}, rh = row.rhStatus||{};
-      pendingSidings += (sid['Sanctioned']||0) + (sid['Proposed']||0);
-      pendingRh += (rh['Sanctioned']||0) + (rh['Proposed']||0);
-      notFeasible += (sid['Not Feasible']||0) + (rh['Not Feasible']||0);
+      infraCount += (sid['Sanctioned']||0)+(sid['Proposed']||0)+(rh['Sanctioned']||0)+(rh['Proposed']||0);
     });
-    if (pendingSidings || pendingRh){
-      longTerm.push(`Infrastructure Planning: <b>${pendingSidings}</b> TM siding(s) and <b>${pendingRh}</b> rest house(s) are sanctioned/proposed but not yet available across the network — build this into the multi-year siding/rest-house capital plan.` +
-        (notFeasible ? ` <b>${notFeasible}</b> location(s) are flagged &ldquo;Not Feasible&rdquo; and need an alternate-site decision.` : ''));
-    }
   }
 
-  // Tenders & Contracts: highest-severity agreement/tender items needing attention.
+  // Tenders & Contracts / Indent Position: items flagged for attention.
   const tc = DATA.tendersContracts;
-  if (tc && (tc.attention||[]).length){
-    const top = tc.attention[0];
-    const highCount = tc.attention.filter(a=>a.severity==='high').length;
-    longTerm.push(`Tenders &amp; Contracts: <b>${tc.attention.length}</b> item(s) need attention${highCount?` (<b>${highCount}</b> high-severity)`:''} — most urgently, ${esc(top.text)}`);
-  }
-
-  // Indent Position: highest-severity procurement-pipeline items needing attention.
+  const tcCount = tc ? (tc.attention||[]).length : 0;
   const ip = DATA.indentPosition;
-  if (ip && (ip.attention||[]).length){
-    const ipTop = ip.attention[0];
-    const ipHigh = ip.attention.filter(a=>a.severity==='high').length;
-    longTerm.push(`Indent Position: <b>${ip.attention.length}</b> indent(s) need attention${ipHigh?` (<b>${ipHigh}</b> high-severity)`:''} — most urgently, ${esc(ipTop.text)}`);
+  const ipCount = ip ? (ip.attention||[]).length : 0;
+
+  const cats = [
+    {label:'Reason for Shortfall', count: shortfallCount, mod:'shortfall'},
+    {label:'Double-Shift >12h', count: dsCount, mod:'doubleshift'},
+    {label:'53-Point Action Plan', count: apCount, mod:'actionplan53'},
+    {label:'Overdue IOH/POH', count: overdueCount, mod:'fleet'},
+    {label:'Infrastructure Planning', count: infraCount, mod:'infra'},
+    {label:'Tenders & Contracts', count: tcCount, mod:'tenders'},
+    {label:'Indent Position', count: ipCount, mod:'indent'},
+  ].filter(c=>c.count>0);
+
+  if (!cats.length){
+    ringEl.innerHTML = '<div class="emptynote">Nothing flagged for attention today.</div>';
+    chipsEl.innerHTML = '';
+    return;
   }
 
-  grid.innerHTML = `
-    <div class="wf-card short"><h4>Short-Term (this month &bull; Sr.DEN-wise)</h4><ul>${shortTerm.map(t=>`<li>${t}</li>`).join('')}</ul></div>
-    <div class="wf-card long"><h4>Long-Term (next 1&ndash;2 quarters &bull; Division-wise)</h4><ul>${longTerm.map(t=>`<li>${t}</li>`).join('')}</ul></div>`;
+  svgDonut(ringEl, {
+    labels: cats.map(c=>c.label),
+    data: cats.map(c=>c.count),
+    onSliceClick: (i)=> goToModule(cats[i].mod),
+  });
+
+  const cols = chartColors().palette;
+  chipsEl.innerHTML = cats.map((c,i)=>
+    `<div class="att-chip" data-mod="${esc(c.mod)}"><span class="dot" style="background:${cols[i%cols.length]}"></span>${esc(c.label)}<span class="n">${c.count}</span></div>`
+  ).join('');
+  Array.from(chipsEl.querySelectorAll('.att-chip')).forEach(el=>{
+    el.addEventListener('click', ()=> goToModule(el.dataset.mod));
+  });
 }
 
 function drawFleetCharts(){
