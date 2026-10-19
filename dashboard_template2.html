@@ -1187,9 +1187,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
      for a wall-mounted monitor/TV. These rules only apply while that's
      active (:fullscreen), so the normal in-dashboard view is unaffected. ---- */
   #mod-networkmap:fullscreen{background:var(--bg); padding:26px 30px; overflow:auto;}
-  #mod-networkmap:fullscreen #nmMap{height:calc(100vh - 300px); min-height:420px;}
-  #mod-networkmap:fullscreen .nm-kpi .val{font-size:32px;}
-  #mod-networkmap:fullscreen .nm-kpi .lbl{font-size:11px;}
+ #mod-networkmap:fullscreen #nmKpiRow{display:none;}
+#mod-networkmap:fullscreen #nmMap{height:calc(100vh - 220px); min-height:420px;}
 
   #nmMapwrap{position:relative; isolation:isolate; border-radius:14px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow-md);}
   #nmMap{height:62vh; min-height:460px; width:100%; background:#E2E8F0;}
