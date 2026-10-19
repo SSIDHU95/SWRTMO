@@ -14,9 +14,10 @@
      type + spacing refresh.
      Single theme (13-Oct-2026 per the user: "Keep only one theme rail. No
      need of that toggle bar." -- the former High-Vis Signal palette and its
-     Rail/Hi-Vis toggle were removed; Rail Spectrum is now the only theme,
-     via the plain :root block below, still with its own light/dark-mode
-     variant for prefers-color-scheme / an explicit [data-theme] override). ---- */
+     Rail/Hi-Vis toggle were removed; Rail Spectrum is now the only theme).
+     Light-only, no dark-mode variant (19-Oct-2026 per the user: the system/
+     browser theme must never change this dashboard's palette -- see the
+     note just below the :root block). ---- */
   :root{
     /* ---- Rail Spectrum -- light ---- */
     --navy:#0F172A; --navy-2:#020617; --steel:#4F46E5; --steel-2:#6366F1;
@@ -36,30 +37,15 @@
     --sans:'Inter',system-ui,-apple-system,sans-serif;
     --serif:'Inter',system-ui,-apple-system,sans-serif;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --bg:#0B1120; --surface:#111827; --surface-2:#1E293B; --border:rgba(255,255,255,.08);
-      --text:#E2E8F0; --muted:#94A3B8; --faint:#64748B;
-      --good:#34D399; --good-bg:#0B2B23; --warn:#FBBF24; --warn-bg:#2B1D06;
-      --bad:#FB7185; --bad-bg:#3A0D18; --steel-2:#818CF8;
-      --cat-commissioning:#A78BFA; --cat-commissioning-bg:#241B3D;
-      --cat-maintenance:#2DD4BF; --cat-maintenance-bg:#09302C;
-      --cat-transit:#38BDF8; --cat-transit-bg:#0B2A3D;
-      --badge-accent-bg:#1E1B4B; --badge-accent-text:#A5B4FC; --wf-long-bg:#1E1B4B; --wf-long-border:#3730A3;
-      --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow-md:0 4px 14px rgba(0,0,0,.4);
-    }
-  }
-  :root[data-theme="dark"]{
-    --bg:#0B1120; --surface:#111827; --surface-2:#1E293B; --border:rgba(255,255,255,.08);
-    --text:#E2E8F0; --muted:#94A3B8; --faint:#64748B;
-    --good:#34D399; --good-bg:#0B2B23; --warn:#FBBF24; --warn-bg:#2B1D06;
-    --bad:#FB7185; --bad-bg:#3A0D18; --steel-2:#818CF8;
-    --cat-commissioning:#A78BFA; --cat-commissioning-bg:#241B3D;
-    --cat-maintenance:#2DD4BF; --cat-maintenance-bg:#09302C;
-    --cat-transit:#38BDF8; --cat-transit-bg:#0B2A3D;
-    --badge-accent-bg:#1E1B4B; --badge-accent-text:#A5B4FC; --wf-long-bg:#1E1B4B; --wf-long-border:#3730A3;
-    --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow-md:0 4px 14px rgba(0,0,0,.4);
-  }
+  /* Dark-mode auto-switching removed (19-Oct-2026) per the user's explicit
+     request: "I don't want the theme of the artifact and website to change
+     as per the theme of the system. I want to keep it in light format
+     only... with the existing color combinations." The
+     @media(prefers-color-scheme:dark) block and the :root[data-theme="dark"]
+     override block that used to redefine these custom properties for a dark
+     palette have been removed outright, so the :root block above (Rail
+     Spectrum -- light) is now the only palette this dashboard ever renders,
+     regardless of the visitor's OS/browser theme setting. */
 
   *{box-sizing:border-box;}
   body{background:var(--bg); color:var(--text); font-family:var(--sans); margin:0; padding-inline:0; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;}
@@ -1170,6 +1156,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	}
 
 
+  
   /* ===== SWR Network Map tab -- scoped additions ===== */
   .nm-kpirow{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px;}
   .nm-kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; box-shadow:var(--shadow-sm);}
@@ -1190,6 +1177,22 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .nm-select{border:1px solid var(--border); border-radius:20px; padding:7px 30px 7px 14px; font-size:12.5px; font-family:var(--sans);
     min-width:230px; max-width:320px; background:var(--surface); color:var(--text); cursor:pointer;}
   .nm-select:focus{outline:2px solid var(--steel-2); outline-offset:0;}
+  .nm-fsbtn{border:1px solid var(--border); background:var(--surface); border-radius:20px; padding:7px 14px; font-size:12px;
+    font-weight:700; color:var(--text); cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-family:var(--sans); margin-left:auto;}
+  .nm-fsbtn:hover{background:var(--surface-2);}
+  .nm-fsbtn svg{width:13px; height:13px; flex:none;}
+
+  /* ---- fullscreen "big-screen" display mode (19-Oct-2026): the toolbar's
+     Fullscreen button requests the browser Fullscreen API on the whole
+     network-map <section>, which -- by the Fullscreen API's own behaviour --
+     replaces the entire viewport with just this section (header/nav/rest of
+     the dashboard are not rendered at all while active), making it suitable
+     for a wall-mounted monitor/TV. These rules only apply while that's
+     active (:fullscreen), so the normal in-dashboard view is unaffected. ---- */
+  #mod-networkmap:fullscreen{background:var(--bg); padding:26px 30px; overflow:auto;}
+  #mod-networkmap:fullscreen #nmMap{height:calc(100vh - 300px); min-height:420px;}
+  #mod-networkmap:fullscreen .nm-kpi .val{font-size:32px;}
+  #mod-networkmap:fullscreen .nm-kpi .lbl{font-size:11px;}
 
   #nmMapwrap{position:relative; isolation:isolate; border-radius:14px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow-md);}
   #nmMap{height:62vh; min-height:460px; width:100%; background:#E2E8F0;}
@@ -1281,6 +1284,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .progress-target-mark{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--text);}
   .progress-nums{display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:7px; font-family:var(--mono);}
 
+  .loss-reasons-card{background:var(--surface-2); border-radius:10px; padding:13px 14px; margin-bottom:16px;}
+  .loss-reasons-title{font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.04em;}
+  .loss-reasons-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .loss-reason-top{display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--text); margin-bottom:4px;}
+  .loss-reason-top .num{font-family:var(--mono); color:var(--bad); font-weight:700; flex:none;}
+  .loss-reason-track{position:relative; height:7px; background:#E2E8F0; border-radius:4px; overflow:hidden;}
+  .loss-reason-fill{position:absolute; left:0; top:0; height:100%; border-radius:4px; background:var(--bad);}
+
   .nm-unplaced-row{border:1px dashed var(--border); border-radius:8px; padding:9px 12px; margin-bottom:7px; font-size:12px; display:flex; justify-content:space-between; gap:10px; align-items:center;}
   .nm-unplaced-row .reason{color:var(--faint); font-size:10.5px; font-family:var(--mono); white-space:nowrap;}
 
@@ -1298,6 +1309,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .nm-designnote{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-size:12px; color:var(--muted); line-height:1.6;}
   .nm-designnote h4{font-size:12.5px; color:var(--text); margin-bottom:6px;}
   .nm-designnote p{margin:0 0 10px;} .nm-designnote p:last-child{margin-bottom:0;}
+
 
 </style>
 <style>
@@ -1502,6 +1514,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
   </section>
 
+  
   <!-- ============ SWR NETWORK MAP ============ -->
   <section class="module" id="mod-networkmap">
     <div class="nm-kpirow" id="nmKpiRow"></div>
@@ -1514,6 +1527,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="nm-chipgroup" id="nmDivChips"></div>
         <select class="nm-select" id="nmTypeFilter"></select>
         <input class="nm-searchbox" id="nmSearchBox" placeholder="Search machine, station or section&hellip;">
+        <button class="nm-fsbtn" id="nmFsBtn" type="button" title="Expand the map to fill the whole screen -- for a wall-mounted monitor/TV display">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5V1h4M15 5V1h-4M1 11v4h4M15 11v4h-4"/></svg>
+          <span id="nmFsBtnLabel">Fullscreen</span>
+        </button>
       </div>
       <div id="nmMapwrap">
         <div id="nmMap"></div>
@@ -1531,6 +1548,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div id="nmUnplacedList"></div>
     </div>
   </section>
+
 
   <!-- ============ PROGRESS VS TARGET ============ -->
   <section class="module" id="mod-progress">
@@ -7393,6 +7411,7 @@ document.addEventListener('click', (e)=>{
 <script>
 
 
+
 (function(){
 'use strict';
 // NOTE (data/code decoupling, 19-Oct-2026): NMDATA used to always be a
@@ -7692,6 +7711,37 @@ function wireSearch(){
   });
 }
 
+// "Beautiful screen" / big-display mode (added 19-Oct-2026, per the user's
+// request for a display-friendly option on the map): requests the browser
+// Fullscreen API on the whole #mod-networkmap section, which -- by how that
+// API works -- takes over the entire viewport with just this section (the
+// rest of the dashboard is not rendered at all while active), so it reads
+// as a clean, big-screen view suitable for a wall-mounted monitor/TV.
+// Falls back to a disabled/hidden button where the API isn't available
+// (e.g. inside some sandboxed iframes) rather than throwing.
+function wireFullscreen(){
+  const btn = document.getElementById('nmFsBtn');
+  const label = document.getElementById('nmFsBtnLabel');
+  const section = document.getElementById('mod-networkmap');
+  if (!btn || !section) return;
+  if (!document.fullscreenEnabled){ btn.style.display = 'none'; return; }
+  btn.addEventListener('click', ()=>{
+    if (document.fullscreenElement){
+      document.exitFullscreen().catch(()=>{});
+    } else {
+      section.requestFullscreen().catch(()=>{});
+    }
+  });
+  document.addEventListener('fullscreenchange', ()=>{
+    const active = document.fullscreenElement === section;
+    if (label) label.textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+    // the map box's own size changes when the section goes fullscreen (see
+    // the #mod-networkmap:fullscreen #nmMap CSS rule) -- Leaflet needs an
+    // explicit nudge to pick that up, same as on first tab display.
+    if (nmMap) setTimeout(()=> nmMap.invalidateSize(), 120);
+  });
+}
+
 function openDrawer(title, cap, body){
   document.getElementById('nmDTitle').innerHTML = title;
   document.getElementById('nmDCap').innerHTML = cap;
@@ -7725,6 +7775,18 @@ function openStationDrawer(code){
 
 function pctClass(p){ if (p==null) return 'mid'; if (p>=90) return 'good'; if (p>=50) return 'mid'; return 'low'; }
 
+// Some rows record today's Actual/Stipulated Progress in metres rather than
+// a plain km number (e.g. "1100 mtrs", or a mixed "1.0 +50 mtrs"), straight
+// from the source sheet -- appending " km" after that text unconditionally
+// produced nonsense like "1100 mtrs km". Only append " km" to a value that
+// doesn't already carry its own unit; otherwise show the sheet's own text
+// as-is.
+function kmLabel(v){
+  if (v == null || v === '') return null;
+  const s = String(v);
+  return /mtr|\bkm\b/i.test(s) ? s : s + ' km';
+}
+
 function progressBarHtml(m){
   if (m.pctAchieved==null && !m.stipulatedKm && !m.actualKm) return '';
   const pct = m.pctAchieved;
@@ -7738,8 +7800,8 @@ function progressBarHtml(m){
       <div class="progress-target-mark" style="left:100%;"></div>
     </div>
     <div class="progress-nums">
-      <span>Achieved: ${m.actualKm?esc(m.actualKm)+' km':'&mdash;'}</span>
-      <span>Target: ${m.stipulatedKm?esc(m.stipulatedKm)+' km':'&mdash;'}</span>
+      <span>Achieved: ${m.actualKm?esc(kmLabel(m.actualKm)):'&mdash;'}</span>
+      <span>Target: ${m.stipulatedKm?esc(kmLabel(m.stipulatedKm)):'&mdash;'}</span>
     </div>
   </div>`;
 }
@@ -7748,12 +7810,53 @@ function detailBulletsHtml(m){
   const rows = [];
   if (m.block) rows.push(['Block worked', esc(m.block) + (m.line ? ' <span style="color:var(--faint)">('+esc(m.line)+' line)</span>' : '')]);
   if (m.kmFrom || m.kmTo) rows.push(['Worked at km', `<span class="num">${esc(m.kmFrom||'?')} &rarr; ${esc(m.kmTo||'?')}</span>`]);
+  // NOTE (fixed 19-Oct-2026): the sheet's "Block availed From/To" columns
+  // store a clock time as a bare decimal (12.3 = 12:30, 14.4 = 14:40, NOT
+  // 12.3 hours) -- parse_daily3.py's fmt_hhmm() now converts these to real
+  // "HH:MM" strings before they ever reach this file, so this just renders
+  // them; no " .30"/" .40"-looking decimal is shown here any more.
   if (m.timeFrom || m.timeTo) rows.push(['Block timing', `<span class="num">${esc(m.timeFrom||'?')} &ndash; ${esc(m.timeTo||'?')} hrs</span>`]);
   if (m.corridorTiming) rows.push(['Corridor block sanctioned', `<span class="num">${esc(m.corridorTiming)}</span>`]);
   if (m.srDen) rows.push(['Section (Sr. DEN)', esc(m.div||'')+' Sr.DEN/'+esc(m.srDen)]);
   if (m.dutyStart || m.dutyEnd) rows.push(['Duty hours', `<span class="num">${esc(m.dutyStart||'?')} &ndash; ${esc(m.dutyEnd||'?')} hrs</span>`]);
+  // ---- block-utilisation figures (added 19-Oct-2026, per the user's
+  // request to show total block granted/stipulated/effective/ineffective
+  // minutes, not just the progress-km bar below). 'Total block granted' is
+  // the sheet's own STIPULATED (sanctioned) block; 'Duration'/'Eff. block'
+  // are what was actually AVAILED and its EFFECTIVE (productive) portion.
+  if (m.blockGrantedGross != null || m.blockGrantedEff != null){
+    const bits = [];
+    if (m.blockGrantedGross != null) bits.push(`${m.blockGrantedGross} min gross`);
+    if (m.blockGrantedEff != null) bits.push(`${m.blockGrantedEff} min effective`);
+    rows.push(['Stipulated block granted', `<span class="num">${esc(bits.join(' &bull; '))}</span>`]);
+  }
+  if (m.durationMin != null) rows.push(['Block duration availed', `<span class="num">${m.durationMin} min</span>`]);
+  if (m.effBlockMin != null) rows.push(['Effective block', `<span class="num">${m.effBlockMin} min</span>`]);
+  if (m.ineffectiveMin != null) rows.push(['Ineffective time', `<span class="num" style="color:var(--bad); font-weight:700;">${m.ineffectiveMin} min</span>`]);
   if (!rows.length) return '';
   return '<ul class="detail-bullets">' + rows.map(([l,v])=>`<li><b>${l}:</b> ${v}</li>`).join('') + '</ul>';
+}
+
+// Breaks "Ineffective time" (above) down into its actual causes -- the 10
+// loss-reason columns the sheet itself records (travel/setup/windup/OHE/
+// Pway/machine-failure/S&T/operating/others), only showing the ones that
+// were actually nonzero for this machine today, largest first, each with a
+// small magnitude bar (width = share of today's total ineffective time).
+function lossReasonsHtml(m){
+  const reasons = (m.lossReasons || []).slice().sort((a,b)=> b.minutes - a.minutes);
+  if (!reasons.length) return '';
+  const total = m.ineffectiveMin || reasons.reduce((s,r)=> s + r.minutes, 0);
+  const items = reasons.map(r=>{
+    const pct = total ? Math.max(4, Math.round(r.minutes / total * 100)) : 0;
+    return `<li>
+      <div class="loss-reason-top"><span>${esc(r.label)}</span><span class="num">${r.minutes} min</span></div>
+      <div class="loss-reason-track"><div class="loss-reason-fill" style="width:${pct}%;"></div></div>
+    </li>`;
+  }).join('');
+  return `<div class="loss-reasons-card">
+    <div class="loss-reasons-title">Reasons the block was ineffective${m.ineffectiveMin!=null?` &bull; ${m.ineffectiveMin} min total`:''}</div>
+    <ul class="loss-reasons-list">${items}</ul>
+  </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -7809,11 +7912,12 @@ function openMachineDrawer(code, idx){
   </div>`;
   const bullets = detailBulletsHtml(m);
   const bar = progressBarHtml(m);
+  const lossHtml = lossReasonsHtml(m);
   const workDone = m.workDone ? `<div class="remarktext"><b>Work done today:</b><br>${esc(m.workDone)}</div>` : '';
   const confPill = `<span class="conf-pill ${conf}"><span class="ring"></span>${esc(CONF_LABEL[conf]||conf)}</span>`;
   const src = `<div class="srcline">${confPill}<br><br>Position source: ${esc(m.source)}</div>`;
   const gotoBtn = `<button class="nm-gotoprogress" data-gotomachine="${esc(m.machine)}">View this machine's full-year Progress vs Target &rarr;</button>`;
-  openDrawer(esc(m.machine), `Section: ${esc(m.block||'&mdash;')} &bull; Daily Progress as of ${esc(NMDATA.kpi.asOf||'')}`, back+gotoBtn+stats+bullets+bar+workDone+src);
+  openDrawer(esc(m.machine), `Section: ${esc(m.block||'&mdash;')} &bull; Daily Progress as of ${esc(NMDATA.kpi.asOf||'')}`, back+gotoBtn+stats+bullets+bar+lossHtml+workDone+src);
   const backBtn = document.querySelector('#nmDBody [data-backto]');
   if (backBtn) backBtn.addEventListener('click', ()=> openStationDrawer(backBtn.dataset.backto));
   const gBtn = document.querySelector('#nmDBody [data-gotomachine]');
@@ -7852,6 +7956,7 @@ function initAll(){
   renderLegend();
   renderUnplaced();
   wireSearch();
+  wireFullscreen();
 }
 
 // Build the static panels (cheap, no Leaflet dependency) once NMDATA is
@@ -7908,6 +8013,8 @@ if (typeof chartDrawers !== 'undefined') {
 // NMDATA and runs the exact same init path a baked build runs immediately.
 window.NM = { closeDrawer, initMap, setData: function(d){ NMDATA = d || null; tryInitAll(); } };
 })();
+
+
 
 
 
