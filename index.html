@@ -84,7 +84,7 @@
      surface, in place of the browser's default blue outline -- only shows
      for keyboard focus (:focus-visible), never on a mouse click. ---- */
   button:focus-visible, [tabindex]:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
-  .kpi:focus-visible, .clickcard:focus-visible, .att-chip:focus-visible, .mlist-item:focus-visible{
+  .kpi:focus-visible, .clickcard:focus-visible, .mlist-item:focus-visible{
     outline:2px solid var(--steel-2); outline-offset:2px; border-radius:4px;
   }
   /* ---- staggered reveal + module/tab-switch fade+rise (31-Oct-2026) ----
@@ -381,28 +381,6 @@
   .dbullets{margin:0; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6;}
   .dbullets li{margin-bottom:2px;}
 
-  /* Attention Snapshot (Overview) -- ring + clickable chips, each chip/slice
-     jumps straight to the tab that holds the full detail behind it. Replaces
-     the older short/long-term "Where Track Machines Need to Improve" wall of
-     text (09-Oct-2026 per the user: too much text on Overview, show a quick
-     visual snapshot instead and send people to the relevant tab for detail). */
-  /* ---- Attention Snapshot (Overview) -- Principal-designer pass, 13-Oct-2026:
-     the donut's own auto-legend is suppressed (svgDonut's legend:false option,
-     only used at this one call site) so .att-chips is the single, unified,
-     clickable legend -- no more duplicate pill rows under the ring. The
-     card's own heading/padding polish (.att-card) was promoted into the
-     shared .card/.card h3/.card .cap rules above on 13-Oct-2026 so every
-     card on every tab reads consistently, not just this one. ---- */
-  .att-wrap{display:flex; gap:28px; align-items:center; flex-wrap:wrap;}
-  .att-ring{flex:0 0 210px; width:210px; max-width:100%;}
-  .att-chips{flex:1 1 360px; display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; align-content:start;}
-  .att-chip{display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); cursor:pointer; font-size:12.5px; font-weight:600; color:var(--text); transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-spring);}
-  .att-chip:active{transform:scale(.97);}
-  .att-chip:hover{background:color-mix(in srgb, var(--surface-2) 88%, black 6%); border-color:var(--steel-2);}
-  .att-chip .dot{width:10px; height:10px; border-radius:50%; flex:none;}
-  .att-chip .n{font-family:var(--mono); font-weight:700; font-size:12px; color:var(--text); margin-left:auto; flex:none;}
-  @media (max-width:700px){ .att-wrap{flex-direction:column; align-items:stretch;} .att-ring{width:100%; max-width:280px; margin:0 auto;} }
-
   /* YoY comparison */
   .yoy-row{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
   .yoy-num{text-align:center;}
@@ -412,13 +390,6 @@
   .yoy-delta{font-family:var(--mono); font-weight:700; font-size:15px; padding:4px 10px; border-radius:7px;}
   .yoy-delta.good{background:var(--good-bg); color:var(--good);} .yoy-delta.bad{background:var(--bad-bg); color:var(--bad);}
 
-  /* source-sheet quick view buttons */
-  .srcgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px;}
-  .srcbtn{display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:11px 13px; cursor:pointer; text-align:left;}
-  .srcbtn:hover{border-color:var(--steel-2); background:var(--surface-2);}
-  .srcbtn .sic{width:30px; height:30px; border-radius:7px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:14px; flex:none; color:var(--steel);}
-  .srcbtn .stxt .t1{font-weight:700; font-size:12.5px;}
-  .srcbtn .stxt .t2{font-size:10.5px; color:var(--muted);}
 
   /* double-shift module */
   .ds-shift-card{border:1px solid var(--border); border-radius:9px; padding:10px 12px; margin-bottom:8px; background:var(--surface);}
@@ -1479,6 +1450,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
 #samSend:active{transform:scale(.92);}
 @media(max-width:480px){ #samPanel{right:6px; left:6px; width:auto; bottom:78px; height:62vh;} #samBtn{right:14px; bottom:14px;} }
 </style>
+
+
 <style>
   /* =====================================================================
      Login screen (Supabase Auth gate) -- rebranded 13-Oct-2026 to match
@@ -1560,8 +1533,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </style>
 </head>
 <body>
-
-
 <div class="login-screen" id="loginScreen">
   <div class="login-bg"></div>
   <div class="login-overlay"></div>
@@ -1626,9 +1597,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 
 
+
 <div id="appShell" style="display:none;">
-
-
 <header class="top">
   <div class="hdr-tier1">
     <div class="brand">
@@ -1647,7 +1617,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <nav class="tabs" id="tabNav">
   <button data-mod="overview" class="active">Overview</button>
-  <button data-mod="networkmap">SWR Network Map</button>
   <button data-mod="progress">Progress vs Target</button>
   <button data-mod="shortfall">Reason for Shortfall</button>
   <button data-mod="exceptions">Exceptions &amp; Downtime</button>
@@ -1666,56 +1635,47 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <section class="module active" id="mod-overview">
     <div class="kpirow" id="kpiRow"></div>
 
-    <div class="card att-card">
-      <div class="cardhead">
-        <div><h3>Attention Snapshot</h3><div class="cap">Items worth a look today &bull; click any category to filter</div></div>
-      </div>
-      <div class="att-wrap">
-        <div class="att-ring" id="attRing"></div>
-        <div class="att-chips" id="attChips"></div>
-      </div>
-    </div>
+    <!-- ============ SWR NETWORK MAP (relocated 13-Nov-2026 into the bottom
+         of Overview per Shruti -- was its own standalone "SWR Network Map"
+         tab/nav button; Attention Snapshot and Source Sheets (removed, same
+         request) used to occupy this spot. Still fully namespaced (nm- CSS
+         classes/ids, its own window.NM IIFE) -- only this markup's position
+         (section.module -> plain div, so it is not independently hidden by
+         the section.module{display:none} rule -- Overview's own class
+         already controls visibility of everything inside it) and its init
+         lifecycle (see drawOverviewCharts() and the NM IIFE's own bottom
+         hook) changed, not the map's internals. ============ -->
+    <div id="mod-networkmap">
+      <div class="nm-kpirow" id="nmKpiRow"></div>
 
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Source Sheets</h3><div class="cap">Open a live snapshot of the data behind this dashboard, one click &bull; downloadable as CSV</div></div>
+      <div class="card">
+        <div class="cardhead">
+          <div><h3>Live Machine Map</h3><div class="cap">Every track machine in today's Daily Progress, plotted on actual RDPS-surveyed track geometry across all three divisions &bull; colour = division, ring = Tamping/Non-Tamping, number = machines at that spot &bull; click a pin for full detail</div></div>
+        </div>
+        <div class="nm-toolbar">
+          <div class="nm-chipgroup" id="nmDivChips"></div>
+          <select class="nm-select" id="nmTypeFilter"></select>
+          <input class="nm-searchbox" id="nmSearchBox" placeholder="Search machine, station or section&hellip;">
+          <button class="nm-fsbtn" id="nmFsBtn" type="button" title="Expand the map to fill the whole screen -- for a wall-mounted monitor/TV display">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5V1h4M15 5V1h-4M1 11v4h4M15 11v4h-4"/></svg>
+            <span id="nmFsBtnLabel">Fullscreen</span>
+          </button>
+        </div>
+        <div id="nmMapwrap">
+          <div id="nmMap"></div>
+          <div class="nm-mapfloat" id="nmLegendBox"></div>
+        </div>
+        <div class="nm-jumplabel">Jump to a division</div>
+        <div class="nm-divjump" id="nmDivJump"></div>
+        <div class="nm-jumplabel">Jump closer &mdash; by Sr.&nbsp;DEN jurisdiction</div>
+        <div class="nm-divjump" id="nmSrdenJump"></div>
       </div>
-      <div class="srcgrid" id="sourceSheetGrid"></div>
-    </div>
-  </section>
 
-  
-  <!-- ============ SWR NETWORK MAP ============ -->
-  <section class="module" id="mod-networkmap">
-    <div class="nm-kpirow" id="nmKpiRow"></div>
-
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Live Machine Map</h3><div class="cap">Every track machine in today's Daily Progress, plotted on actual RDPS-surveyed track geometry across all three divisions &bull; colour = division, ring = Tamping/Non-Tamping, number = machines at that spot &bull; click a pin for full detail</div></div>
+      <div class="card" id="nmUnplacedCard" style="display:none;">
+        <h3>Left off this map, on purpose</h3>
+        <div class="cap">Every machine below is in today's Daily Progress but could not be confidently placed &mdash; shown here rather than guessed at.</div>
+        <div id="nmUnplacedList"></div>
       </div>
-      <div class="nm-toolbar">
-        <div class="nm-chipgroup" id="nmDivChips"></div>
-        <select class="nm-select" id="nmTypeFilter"></select>
-        <input class="nm-searchbox" id="nmSearchBox" placeholder="Search machine, station or section&hellip;">
-        <button class="nm-fsbtn" id="nmFsBtn" type="button" title="Expand the map to fill the whole screen -- for a wall-mounted monitor/TV display">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5V1h4M15 5V1h-4M1 11v4h4M15 11v4h-4"/></svg>
-          <span id="nmFsBtnLabel">Fullscreen</span>
-        </button>
-      </div>
-      <div id="nmMapwrap">
-        <div id="nmMap"></div>
-        <div class="nm-mapfloat" id="nmLegendBox"></div>
-      </div>
-      <div class="nm-jumplabel">Jump to a division</div>
-      <div class="nm-divjump" id="nmDivJump"></div>
-      <div class="nm-jumplabel">Jump closer &mdash; by Sr.&nbsp;DEN jurisdiction</div>
-      <div class="nm-divjump" id="nmSrdenJump"></div>
-    </div>
-
-    <div class="card" id="nmUnplacedCard" style="display:none;">
-      <h3>Left off this map, on purpose</h3>
-      <div class="cap">Every machine below is in today's Daily Progress but could not be confidently placed &mdash; shown here rather than guessed at.</div>
-      <div id="nmUnplacedList"></div>
     </div>
   </section>
 
@@ -2509,11 +2469,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 
 
-</div> <!-- end appShell -->
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 let DATA;
-
 // =====================================================================
 // tiny dependency-free SVG chart library (no external CDN needed)
 // now with per-element click callbacks for drill-down interactivity
@@ -3053,6 +3012,27 @@ function drillMachineNames(title, cap, names){
 }
 
 // ---------------------------------------------------------------------
+// Dynamic FY month list (fixed 13-Nov-2026 per Shruti: "the target vs
+// progress chart is showing only up till September... the dashboard must
+// show whichever month is actually the latest one updated, automatically" --
+// mirrors pipeline_helpers.MONTH_ABBR's own 13-Nov-2026 fix on the pipeline
+// side). Every chart below used to hardcode ['apr'..'sep'], which truncated
+// the moment the live cumulative_progress payload (which already carries
+// the full Apr-Mar FY) advanced past September. A month counts as "present"
+// when ANY machine record in the given list carries a real number for it --
+// a not-yet-reached FY month comes back null/undefined (see aggregate.py's
+// _num_or_none) and is correctly excluded, exactly like the Python side.
+// ---------------------------------------------------------------------
+const FY_MONTH_KEYS = ['apr','may','jun','jul','aug','sep','oct','nov','dec','jan','feb','mar'];
+const FY_MONTH_LABELS = {apr:'Apr',may:'May',jun:'Jun',jul:'Jul',aug:'Aug',sep:'Sep',oct:'Oct',nov:'Nov',dec:'Dec',jan:'Jan',feb:'Feb',mar:'Mar'};
+function fyMonthsPresent(rows){
+  const list = rows || (DATA.progress && DATA.progress.machines) || [];
+  const present = FY_MONTH_KEYS.filter(k => list.some(m => typeof m[k] === 'number'));
+  return present.length ? present : ['apr'];
+}
+function fyMonthLabelsFor(keys){ return keys.map(k => FY_MONTH_LABELS[k]); }
+
+// ---------------------------------------------------------------------
 // Machine-level exhaustive drill: monthly performance, exceptions,
 // shortfall history, IOH/POH / deputation detail — "never need to go
 // back to the Daily Progress sheet" for a single machine.
@@ -3060,8 +3040,8 @@ function drillMachineNames(title, cap, names){
 function openMachineDetailDrawer(machineName){
   const m = DATA.progress.machines.find(x=>x.machine===machineName);
   if (!m) return;
-  const months = ['apr','may','jun','jul','aug','sep'];
-  const monthLbls = ['Apr','May','Jun','Jul','Aug','Sep'];
+  const months = fyMonthsPresent([m]);
+  const monthLbls = fyMonthLabelsFor(months);
   const monthVals = months.map(k=> typeof m[k]==='number'? m[k] : 0);
   const c = chartColors();
 
@@ -3078,7 +3058,7 @@ function openMachineDetailDrawer(machineName){
     {l:'Target to date', v: targetTxt},
     {l:'Achieved to date', v: achievedTxt},
   ]);
-  html += dcard('Month-by-month: Target vs Progress', 'Apr&ndash;Sep 2026 &bull; orange = target, green = met, red = shortfall', `<div class="chartwrap" style="height:220px"><div id="mdMonthChart" class="svgchart"></div></div>`);
+  html += dcard('Month-by-month: Target vs Progress', `${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} ${DATA.meta.fy||''} &bull; orange = target, green = met, red = shortfall`, `<div class="chartwrap" style="height:220px"><div id="mdMonthChart" class="svgchart"></div></div>`);
   if (m.secondary){
     html += dcard(`Month-by-month: Target vs Progress — Turnouts (T/O)`, 'This machine also carries a Turnout (T/O) target alongside its Km target', `<div class="chartwrap" style="height:220px"><div id="mdMonthChartSec" class="svgchart"></div></div>`);
   }
@@ -3096,7 +3076,7 @@ function openMachineDetailDrawer(machineName){
     html += dcard('Deputed Out', null, statRow([
       {l:'Home division', v:esc(m.homeDiv||'—')},
       {l:'Currently at', v:esc(m.workingAt||'—')},
-      {l:'Progress given (Apr–Sep)', v:given.toFixed(1)+' '+esc(m.unit||'')},
+      {l:`Progress given (${monthLbls[0]}–${monthLbls[monthLbls.length-1]})`, v:given.toFixed(1)+' '+esc(m.unit||'')},
     ]) + `<div class="dcap" style="margin-top:8px;">Exact deputation start date is not separately tracked in the source workbooks; figures above are the machine's recorded progress for FY2026-27 at its current location.</div>`);
   }
 
@@ -3109,7 +3089,7 @@ function openMachineDetailDrawer(machineName){
   html += dcard('Issue history', null,
     (excRows.length? excRows.map(e=>`<div class="dmachine-card" style="cursor:default;"><div class="dmtop"><span class="dmname">${esc(e.Category)}</span><span class="dbadge bad">${e.DaysUnder??'—'}d</span></div><div class="dmmeta">Not working since ${esc(e.UnderSince||'—')} &bull; ${esc(e.Location||'')}</div><div class="eremark" style="margin-top:4px;">${esc(e.Remarks||'')}</div></div>`).join('')
       : `<div class="dcap">No open exception logged for this machine as of ${esc((DATA.exceptions.latestDayLabel)||'the latest snapshot')}.</div>`) +
-    (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (Apr&ndash;Sep shortfall log).</div>` : '')
+    (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} shortfall log).</div>` : '')
   );
 
   openDrawer(m.machine, `${esc(m.type)} &bull; ${esc(m.tamping)}`, html);
@@ -3288,8 +3268,7 @@ function openDeputedOutDrawer(){
     rows.map(m=>{
       const id = 'dp'+Math.random().toString(36).slice(2,9);
       setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openMachineDetailDrawer(m.machine)); }, 0);
-      const months = ['apr','may','jun','jul','aug','sep'];
-      const given = months.reduce((s,k)=> s+(typeof m[k]==='number'?m[k]:0), 0);
+      const given = FY_MONTH_KEYS.reduce((s,k)=> s+(typeof m[k]==='number'?m[k]:0), 0);
       return `<div class="dmachine-card" id="${id}">
         <div class="dmtop"><span class="dmname">${esc(m.machine)}</span><span class="dbadge accent">${esc(m.workingAt||'')}</span></div>
         <div class="dmmeta">Home division: <b>${esc(m.homeDiv||'—')}</b> &bull; progress given this FY: <b>${given.toFixed(1)} ${esc(m.unit||'')}</b></div>
@@ -3310,7 +3289,8 @@ function openDivProgressDrawer(){
   let html = statRow([{l:'Fleet-wide % progress', v: fmtPct(totT?totA/totT:0), cls:(totA/totT>=1?'good':(totA/totT>=0.85?'warn':'bad'))}]);
   // fleet-wide month-by-month Target vs Progress (task: clicking this KPI should give
   // the same standard chart pattern used elsewhere — added 28-Sep-2026)
-  html += dcard('Month-by-month: Target vs Progress, fleet-wide', 'Apr&ndash;Sep 2026 &bull; orange = target, green = met, red = shortfall', `<div class="chartwrap" style="height:220px"><div id="dpMonthChart" class="svgchart"></div></div>`);
+  const dpMonths = fyMonthsPresent(DATA.progress.machines), dpMonthLbls = fyMonthLabelsFor(dpMonths);
+  html += dcard('Month-by-month: Target vs Progress, fleet-wide', `${dpMonthLbls[0]}&ndash;${dpMonthLbls[dpMonthLbls.length-1]} ${DATA.meta.fy||''} &bull; orange = target, green = met, red = shortfall`, `<div class="chartwrap" style="height:220px"><div id="dpMonthChart" class="svgchart"></div></div>`);
   html += dcard('By Machine Type', 'Each type measured against its own annual target — this is the meaningful breakdown',
     mt.map(d=>breakRow(d.type, `${d.actualToDate.toFixed(1)} / ${d.targetToDate.toFixed(1)} ${esc(rowUnit(d))}`, fmtPct(d.pct), d.pct,
       ()=>openMachineTypeMonthlyDrawer(d.type))).join(''));
@@ -3322,8 +3302,8 @@ function openDivProgressDrawer(){
       const sub = `${joinBreakdown(breakdownBy(divMachines,'actualToDate',m=>m.unit), v=>v.toFixed(1))} / ${joinBreakdown(breakdownBy(divMachines,'targetToDate',m=>m.unit), v=>v.toFixed(1))}`;
       return breakRow(d.div, sub, fmtPct(d.pct), d.pct, ()=>openDivTypeSplitDrawer(d.div));
     }).join(''));
-  openDrawer('Overall % Progress', 'FY 2026-27, cumulative to date', html);
-  const months = ['apr','may','jun','jul','aug','sep'], monthLbls=['Apr','May','Jun','Jul','Aug','Sep'];
+  openDrawer('Overall % Progress', `${DATA.meta.fy||'FY'}, cumulative to date`, html);
+  const months = dpMonths, monthLbls = dpMonthLbls;
   const all = DATA.progress.machines;
   const monthTargets = months.map(()=> all.reduce((s,m)=>s+(m.targetMonth||0),0));
   const monthActuals = months.map(k=> all.reduce((s,m)=> s+(typeof m[k]==='number'?m[k]:0), 0));
@@ -3850,8 +3830,18 @@ function setupSrdenSections(){
 
   const sel = document.getElementById('srdenSelect');
   sel.innerHTML = keys.map(k=>`<option value="${esc(k)}">${esc(k)} (${bundle[k].machineCount} machines)</option>`).join('');
+  // Guard added 13-Nov-2026 (found while verifying the website's 5 fixes,
+  // not one of the 5 itself): DATA.shortfall.srdenBundle is empty right now
+  // because the Daily Progress shortfall-category log has no live Supabase
+  // sync yet (Task #53, same root cause as the Sr.DEN gap -- see
+  // extract_shortfall_records() in aggregate.py). With no <option>s, sel.value
+  // was "" and bundle[""] was undefined, so every Overview/Shortfall/
+  // Exceptions redraw threw here. Degrade quietly instead of throwing; once
+  // that sync exists this behaves exactly as before.
   function renderMsg(){
-    document.getElementById('srdenMsgBox').textContent = bundle[sel.value].message;
+    const box = document.getElementById('srdenMsgBox');
+    const msg = bundle[sel.value];
+    box.textContent = msg ? msg.message : 'No Sr.DEN jurisdiction data available yet.';
   }
   sel.addEventListener('change', renderMsg);
   renderMsg();
@@ -4307,8 +4297,15 @@ function setupFleetTable(){
 // =====================================================================
 function drawOverviewCharts(){
   setupSrdenSections();
-  renderSourceSheetGrid();
-  renderAttentionSnapshot();
+  // Network Map relocated into the bottom of Overview 13-Nov-2026 (per
+  // Shruti) -- fires on every Overview show/revisit, exactly like every
+  // other chartDrawers entry. initMap() is idempotent (see its own
+  // mapInited guard in the Network Map IIFE below): the first call does
+  // the full Leaflet init, every later one just invalidateSize()s it.
+  // Covers every revisit; the very first page load (before this script
+  // tag even runs) is covered by the Network Map IIFE's own bottom hook,
+  // which checks currentModule === 'overview' once window.NM exists.
+  if (window.NM && window.NM.initMap) window.NM.initMap();
 }
 
 // ---------------------------------------------------------------------
@@ -4499,39 +4496,6 @@ function renderYoy(){
     onBarClick
   });
 }
-
-// ---------------------------------------------------------------------
-// Source-sheet quick-view buttons (Overview) — one-click snapshot of
-// each dataset that feeds the dashboard, with CSV download.
-// ---------------------------------------------------------------------
-function sourceSheetsList(){
-  const list = [
-    {key:'progress', icon:'\u{1F4C8}', title:'Cumulative Progress', sub:`${DATA.meta.fleetSize} machines, ${DATA.meta.periodCovered}`},
-    {key:'exceptions', icon:'⚠️', title:'Exception Sheet', sub:`${esc(DATA.exceptions.latestDayLabel||'—')} snapshot &bull; ${DATA.exceptions.latest.length} open`},
-    {key:'iohpoh', icon:'\u{1F527}', title:'IOH/POH Planning', sub:`${DATA.fleet.iohPohOverdueCount||0} overdue of ${DATA.fleet.iohPohTotalTracked||0} tracked`},
-    {key:'doubleshift', icon:'⏱️', title:'Double-Shift Roster', sub:`${(DATA.fleet.doubleShift&&DATA.fleet.doubleShift.daysCovered)||0} days logged, shift-by-shift`},
-  ];
-  if (DATA.infra){
-    list.push({key:'infra', icon:'\u{1F3E0}', title:'SWR Sidings & Rest House', sub:`${(DATA.infra.stationRows||[]).length} stations &bull; divisions, Sr.DEN, construction`});
-  }
-  if (tcAvailable()){
-    const tc = DATA.tendersContracts;
-    list.push({key:'tenders', icon:'\u{1F4DD}', title:'Tenders & Contracts', sub:`${tc.agreements.length} agreements &bull; ${tc.kpi.expiredCount} expired, ${tc.kpi.expiringSoonCount} expiring soon`});
-  }
-  if (ipAvailable()){
-    const ip = DATA.indentPosition;
-    const tot = ip.summary.byIndent.find(d=>/total/i.test(d.store)) || {total:0};
-    list.push({key:'indent', icon:'\u{1F4E6}', title:'Indent Position', sub:`${Math.round(tot.total||0)} indents in the pipeline &bull; ${(ip.attention||[]).length} flagged`});
-  }
-  return list;
-}
-function renderSourceSheetGrid(){
-  const grid = document.getElementById('sourceSheetGrid');
-  if (!grid) return;
-  const list = sourceSheetsList();
-  grid.innerHTML = list.map(s=>`<button class="srcbtn" data-k="${s.key}"><span class="sic">${s.icon}</span><span class="stxt"><div class="t1">${esc(s.title)}</div><div class="t2">${s.sub}</div></span></button>`).join('');
-  Array.from(grid.querySelectorAll('.srcbtn')).forEach(b=> b.addEventListener('click', ()=>openSourceSheetDrawer(b.dataset.k)));
-}
 function csvEscape(v){ const s = v==null?'':String(v); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
 function tableToCsv(headers, rows){
   return [headers.join(','), ...rows.map(r=>r.map(csvEscape).join(','))].join('\n');
@@ -4605,7 +4569,10 @@ function setupTypeProgressPicker(){
 // ---------------------------------------------------------------------
 function openMachineTypeMonthlyDrawer(type){
   const rows = expandSecondary(DATA.progress.machines).filter(m=>m.type===type);
-  const months = ['apr','may','jun','jul','aug','sep'], monthLbls=['Apr','May','Jun','Jul','Aug','Sep'];
+  // Fixed 13-Nov-2026 per Shruti -- months now derive from whichever FY
+  // months this type's own machines actually carry data for, instead of a
+  // frozen Apr-Sep window (see fyMonthsPresent()/pipeline_helpers.MONTH_ABBR).
+  const months = fyMonthsPresent(rows), monthLbls = fyMonthLabelsFor(months);
   const totalTarget = rows.reduce((s,m)=>s+(m.targetToDate||0),0);
   const totalActual = rows.reduce((s,m)=>s+(m.actualToDate||0),0);
   const overallPct = totalTarget? totalActual/totalTarget : 0;
@@ -4619,6 +4586,33 @@ function openMachineTypeMonthlyDrawer(type){
   ]);
   html += dcard('Month-by-month: Target vs Progress (all machines of this type combined)', null, `<div class="chartwrap" style="height:240px"><div id="mtMonthChart" class="svgchart"></div></div>`);
 
+  // IOH/POH remark, at the bottom of this chart (added 13-Nov-2026 per
+  // Shruti: "add an IOH/POH remark at the bottom of this chart... take it
+  // directly from the exception sheet, like BCM351400/DuoMatic090/UTV02").
+  // DATA.exceptions.iohPohReconciled is exactly that -- today's Exception
+  // Sheet, reconciled against Cumulative Progress Status, filtered here to
+  // this machine type via its own Type field (aggregate.py). Days
+  // elapsed/designated come from the matching progress.machines record's
+  // iohPohDaysElapsed/iohPohDays (same IOH/POH-days fix), falling back to
+  // the reconciled row's own DaysUnder if that machine can't be matched.
+  const iohPohRowsForType = (DATA.exceptions.iohPohReconciled||[]).filter(r=>r.Type===type);
+  if (iohPohRowsForType.length){
+    html += dcard('IOH / POH — this machine type', `From the ${esc(DATA.exceptions.latestDayLabel||'latest')} Exception Sheet &bull; days elapsed vs. total days designated`,
+      iohPohRowsForType.map(r=>{
+        const pm = DATA.progress.machines.find(x=>x.machine===r.Machine);
+        const elapsed = (pm && pm.iohPohDaysElapsed!=null) ? pm.iohPohDaysElapsed : r.DaysUnder;
+        const designated = (pm && pm.iohPohDays!=null) ? pm.iohPohDays : null;
+        const over = designated!=null && elapsed!=null && elapsed>designated;
+        const id = 'iprt'+Math.random().toString(36).slice(2,9);
+        if (pm) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openMachineDetailDrawer(pm.machine)); }, 0);
+        return `<div class="dmachine-card" id="${id}"${pm?'':' style="cursor:default;"'}>
+          <div class="dmtop"><span class="dmname">${esc(r.Machine)}</span><span class="dbadge ${r.Status==='IOH'?'warn':'bad'}">${esc(r.Status||'IOH/POH')}</span></div>
+          <div class="dmmeta">${esc(r.Division||'')}${r.StartDate?(' &bull; since '+esc(r.StartDate)):''}${r.ExpectedCompletion?(' &rarr; '+esc(r.ExpectedCompletion)):''}</div>
+          <div class="dmmeta"${over?' style="color:var(--bad)"':''}><b>${elapsed??'—'} of ${designated??'—'} days</b> designated${over?' &bull; overdue':''}</div>
+        </div>`;
+      }).join(''));
+  }
+
   const yoyRow = (DATA.progress.yoy && DATA.progress.yoy.byType || []).find(r=>r.type===type);
   if (yoyRow){
     const deltaCls = yoyRow.delta>=0 ? 'good' : 'bad';
@@ -4630,11 +4624,11 @@ function openMachineTypeMonthlyDrawer(type){
     </div>`);
   }
 
-  html += dcard('Machines', 'click a machine for its individual record', rows.map(m=>{
-    const id = 'mt'+Math.random().toString(36).slice(2,9);
-    setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openMachineDetailDrawer(m.baseMachine||m.machine)); }, 0);
-    return `<div class="dmachine-card" id="${id}"><div class="dmtop"><span class="dmname">${esc(m.machine)}</span>${pctPill(m.pct)}</div><div class="dmmeta">${esc(m.div)} &bull; ${esc(m.status)}</div></div>`;
-  }).join(''));
+  // Reuses machineRowHtml() (13-Nov-2026 fix) instead of this drawer's own
+  // bare div/status-only card -- brings Sr.DEN and the per-machine IOH/POH
+  // line in "for free", consistent with every other machine list on the
+  // dashboard (Fleet Size, Machines Working, etc).
+  html += dcard('Machines', 'click a machine for its individual record', rows.map(machineRowHtml).join(''));
   openDrawer(`${type} — Progress vs Target`, `${rows.length} machines &bull; ${esc((rows[0]&&rows[0].tamping)||'')}`, html);
   const monthTargets = months.map(()=> rows.reduce((s,m)=>s+(m.targetMonth||0),0));
   const monthActuals = months.map(k=> rows.reduce((s,m)=> s+(typeof m[k]==='number'?m[k]:0), 0));
@@ -4649,7 +4643,11 @@ function drawShortfallCharts(){
   const nonProd = catCounts.filter(([k])=>k!=='Productive Work - Full Progress');
   const catDrill = (cat, count)=>{
     const top = (DATA.shortfall.catMachine[cat]||[]);
-    drillMachineNames(cat, `Top machines behind this reason, Apr&ndash;Sep &bull; ${count} entries total`, top.map(x=>x[0]));
+    // Fixed 13-Nov-2026 per Shruti -- caption now reflects the actual FY
+    // month span instead of a frozen "Apr-Sep" string.
+    const sfMonths = fyMonthsPresent(DATA.progress.machines);
+    const sfSpan = `${FY_MONTH_LABELS[sfMonths[0]]}&ndash;${FY_MONTH_LABELS[sfMonths[sfMonths.length-1]]}`;
+    drillMachineNames(cat, `Top machines behind this reason, ${sfSpan} &bull; ${count} entries total`, top.map(x=>x[0]));
   };
 
   svgBar(document.getElementById('sfCatChart'), {
@@ -4658,7 +4656,12 @@ function drawShortfallCharts(){
     onBarClick:(i)=>catDrill(catCounts[i][0], catCounts[i][1])
   });
 
-  const months = ['Apr','May','Jun','Jul','Aug','Sep'];
+  // Fixed 13-Nov-2026 per Shruti -- full FY month list instead of a frozen
+  // Apr-Sep window (see FY_MONTH_LABELS / pipeline_helpers.MONTH_ABBR). This
+  // chart is keyed by capitalized month label (DATA.shortfall.byMonthCat),
+  // so Object.values() of FY_MONTH_LABELS (already in FY order) is used
+  // directly rather than fyMonthsPresent()+fyMonthLabelsFor().
+  const months = Object.values(FY_MONTH_LABELS);
   const topCats = nonProd.slice(0,6).map(x=>x[0]);
   svgLine(document.getElementById('sfTrendChart'), {
     labels: months, showValues: true,
@@ -4763,92 +4766,6 @@ function drawExceptionsCharts(){
 function goToModule(mod){
   const btn = document.querySelector('#tabNav button[data-mod="'+mod+'"]');
   if (btn) btn.click();
-}
-
-// ---------------------------------------------------------------------
-// Overview "Attention Snapshot" (replaced the old "Where Track Machines Need
-// to Improve" short/long-term text digest on 09-Oct-2026 per the user: too
-// much reading on Overview -- show a quick visual instead, each slice/chip
-// jumping straight to the tab that already carries the full detail behind
-// it, rather than restating that detail as paragraphs here).
-// ---------------------------------------------------------------------
-function renderAttentionSnapshot(){
-  const ringEl = document.getElementById('attRing');
-  const chipsEl = document.getElementById('attChips');
-  if (!ringEl || !chipsEl) return;
-
-  // Sr.DEN jurisdictions carrying an open non-productive shortfall concern this
-  // period -- a jurisdiction count (not a raw entry-count, which runs into the
-  // hundreds and would swamp every other, much smaller category below in the
-  // ring below out of all proportion to how "big" each concern actually is).
-  const bundle = DATA.shortfall.srdenBundle||{};
-  const shortfallCount = Object.values(bundle).filter(b=>
-    (b.topCategories||[]).some(([k,v])=> k!=='Productive Work - Full Progress' && v>0)
-  ).length;
-
-  // Double-Shift Roster: shifts over 12h this period (staff fatigue risk).
-  const ds = (DATA.fleet||{}).doubleShift;
-  const dsCount = ds ? (ds.over12hRecords||[]).length : 0;
-
-  // 53-Point Action Plan: points stalled or flagged nil-progress.
-  const apIns = ((DATA.actionPlan53||{}).insights)||null;
-  const apCount = apIns ? new Set([...(apIns.stalledPoints||[]).map(p=>p.sno), ...(apIns.flaggedNilPoints||[]).map(p=>p.sno)]).size : 0;
-
-  // Fleet Health: machines overdue for a scheduled IOH/POH.
-  const overdueCount = (DATA.fleet.iohPohOverdue||[]).length;
-
-  // Infrastructure Planning: TM sidings/rest houses sanctioned/proposed, not yet available.
-  const infra = DATA.infra;
-  let infraCount = 0;
-  if (infra && (infra.srdenTable||[]).length){
-    infra.srdenTable.forEach(row=>{
-      const sid = row.sidingStatus||{}, rh = row.rhStatus||{};
-      infraCount += (sid['Sanctioned']||0)+(sid['Proposed']||0)+(rh['Sanctioned']||0)+(rh['Proposed']||0);
-    });
-  }
-
-  // Tenders & Contracts / Indent Position: items flagged for attention.
-  const tc = DATA.tendersContracts;
-  const tcCount = tc ? (tc.attention||[]).length : 0;
-  const ip = DATA.indentPosition;
-  const ipCount = ip ? (ip.attention||[]).length : 0;
-
-  const cats = [
-    {label:'Reason for Shortfall', count: shortfallCount, mod:'shortfall'},
-    {label:'Double-Shift >12h', count: dsCount, mod:'doubleshift'},
-    {label:'53-Point Action Plan', count: apCount, mod:'actionplan53'},
-    {label:'Overdue IOH/POH', count: overdueCount, mod:'fleet'},
-    {label:'Infrastructure Planning', count: infraCount, mod:'infra'},
-    {label:'Tenders & Contracts', count: tcCount, mod:'tenders'},
-    {label:'Indent Position', count: ipCount, mod:'indent'},
-  ].filter(c=>c.count>0);
-
-  if (!cats.length){
-    ringEl.innerHTML = '<div class="emptynote">Nothing flagged for attention today.</div>';
-    chipsEl.innerHTML = '';
-    return;
-  }
-
-  // Curated Indigo/Emerald/Amber/Rose/Cyan/Violet/Fuchsia palette, scoped to
-  // this one ring+legend pair only (13-Oct-2026 per the user's design pass) --
-  // chartColors()'s own site-wide palette is untouched for every other chart.
-  // legend:false suppresses svgDonut's own auto-generated legend row so
-  // .att-chips below is the single, unified, clickable legend -- no duplicate.
-  const cols = ['#6366F1','#10B981','#F59E0B','#F43F5E','#06B6D4','#8B5CF6','#D946EF'];
-  svgDonut(ringEl, {
-    labels: cats.map(c=>c.label),
-    data: cats.map(c=>c.count),
-    onSliceClick: (i)=> goToModule(cats[i].mod),
-    legend: false,
-    palette: cols,
-  });
-
-  chipsEl.innerHTML = cats.map((c,i)=>
-    `<div class="att-chip" data-mod="${esc(c.mod)}"><span class="dot" style="background:${cols[i%cols.length]}"></span>${esc(c.label)}<span class="n">${c.count}</span></div>`
-  ).join('');
-  Array.from(chipsEl.querySelectorAll('.att-chip')).forEach(el=>{
-    el.addEventListener('click', ()=> goToModule(el.dataset.mod));
-  });
 }
 
 function drawFleetCharts(){
@@ -5217,7 +5134,12 @@ function hydrateDynamicCaptions(){
   const setText = (id, text)=>{ const el=document.getElementById(id); if(el) el.textContent = text; };
   const setHtml = (id, html)=>{ const el=document.getElementById(id); if(el) el.innerHTML = html; };
   setText('flAgeCap', `${DATA.meta.fleetSize} machines, SWR track machine fleet — click a bar for the machine list`);
-  setHtml('rvSfCap', `Apr&ndash;Sep 2026 &bull; ${(DATA.shortfall.totalEntries||0).toLocaleString()} tagged Remarks entries`);
+  // Fixed 13-Nov-2026 per Shruti -- caption span now follows the actual FY
+  // months present in the Cumulative Progress data instead of a frozen
+  // "Apr-Sep 2026" string.
+  const rvSfMonths = fyMonthsPresent(DATA.progress.machines);
+  const rvSfSpan = `${FY_MONTH_LABELS[rvSfMonths[0]]}&ndash;${FY_MONTH_LABELS[rvSfMonths[rvSfMonths.length-1]]} ${DATA.meta.fy||''}`;
+  setHtml('rvSfCap', `${rvSfSpan} &bull; ${(DATA.shortfall.totalEntries||0).toLocaleString()} tagged Remarks entries`);
   setHtml('excCatCap', `${esc(day)} &bull; click a bar for the machines`);
   setText('excTrendTitle', `${DATA.exceptions.trend.length}-Day Trend`);
   setText('excTrendCap', `Total open exceptions, ${range}`);
@@ -8056,7 +7978,9 @@ const chartDrawers = {
   tenders: drawTcCharts,
   indent: drawIpCharts,
   livesources: drawLiveSourcesCharts,
-  networkmap: function(){ if (window.NM && window.NM.initMap) window.NM.initMap(); },
+  // No more standalone 'networkmap' key (13-Nov-2026, per Shruti) -- the
+  // map is now part of Overview and initializes via drawOverviewCharts()
+  // above, which calls window.NM.initMap() itself.
 };
 let currentModule = 'overview';
 function redrawCurrent(skipMotion){
@@ -8178,8 +8102,10 @@ document.getElementById('tabNav').addEventListener('click', e=>{
 // Tab bar visual affordances only (13-Oct-2026 Principal-designer pass) --
 // neither of these touches routing/selection: renderTabBadges() appends a
 // read-only count chip to each button (same counts already surfaced by
-// renderAttentionSnapshot()/renderKpis() elsewhere -- re-derived here
-// read-only from DATA, nothing new computed), and the scroll-fade pair
+// renderKpis() elsewhere -- re-derived here read-only from DATA, nothing
+// new computed; previously also cross-referenced the Overview tab's
+// Attention Snapshot card, removed 13-Nov-2026 per Shruti), and the
+// scroll-fade pair
 // just toggles two classes off the #tabNav scrollport's own scroll
 // position so the edge gradients and snap behaviour feel alive.
 // ---------------------------------------------------------------------
@@ -8280,6 +8206,7 @@ safe('tabBadges', renderTabBadges);
 safe('tabFades', updateTabFades);
 redrawCurrent();
 } // end startDashboard()
+
 
 
 // =====================================================================
@@ -8682,7 +8609,7 @@ function wireSearch(){
     allMarkers.forEach(m=>{
       const code = m._swr.code;
       const st = NMDATA.stations[code];
-      const hay = (code + ' ' + st.machines.map(x=>x.machine+' '+x.block).join(' ')).toUpperCase();
+      const hay = (code + ' ' + st.machines.map(x=>x.machine+' '+(x.block||'')).join(' ')).toUpperCase();
       if (hay.includes(q)) m.addTo(markerLayer);
     });
   });
@@ -8733,12 +8660,29 @@ function closeDrawer(){
 
 const CONF_LABEL = {surveyed:'RDPS-surveyed', confirmed:'Confirmed (non-RDPS source)', approximate:'Approximate'};
 
+// Added 13-Nov-2026 alongside the live networkMap payload
+// (sources/network_map.py): that live source (daily_positions) only
+// ever gives {machine, div, stabledAt} -- it has no concept of
+// working/under-overhaul status or IOH/POH type at all, unlike the old
+// one-off baked snapshot's richer per-machine fields. Returns null when
+// status is genuinely unknown, so callers can skip the pill entirely
+// instead of defaulting to a wrong-sounding "Under Overhaul" guess.
+function machineStatusLabel(m){
+  if (m.status === 'working') return 'Working';
+  if (m.status === 'under_overhaul') return m.iohPohType ? ('Under '+m.iohPohType) : 'Under Overhaul';
+  return null;
+}
+function machineStatusPillHtml(m){
+  const label = machineStatusLabel(m);
+  return label ? `<span class="pill ${esc(m.status||'')}">${esc(label)}</span>` : '';
+}
+
 function openStationDrawer(code){
   const st = NMDATA.stations[code];
   if (!st) return;
   const body = st.machines.map((m,i)=>`
     <div class="mlist-item" data-machine-idx="${i}" data-station="${esc(code)}">
-      <div class="t1"><span class="type-badge" style="background:${catColor(m.cat)}">${glyphSvg(m.cat)}</span>${esc(m.machine)} <span class="pill ${m.status}">${m.status==='working'?'Working':(m.iohPohType?('Under '+m.iohPohType):'Under Overhaul')}</span></div>
+      <div class="t1"><span class="type-badge" style="background:${catColor(m.cat)}">${glyphSvg(m.cat)}</span>${esc(m.machine)} ${machineStatusPillHtml(m)}</div>
       <div class="t2">${esc(m.typeName)} &bull; ${esc(m.block||'&mdash;')}</div>
     </div>`).join('');
   const conf = st.confidence || 'surveyed';
@@ -8882,17 +8826,21 @@ function openMachineDrawer(code, idx){
   const back = `<button class="nm-backbtn" data-backto="${esc(code)}">&larr; Back to ${esc(code)}</button>`;
   const conf = m.posConfidence || st.confidence || 'surveyed';
   const iohPohPill = m.iohPohType ? `<span class="iohpoh-pill">Under ${esc(m.iohPohType)}</span>` : '';
+  const statusLabel = machineStatusLabel(m);
+  const statusStatRow = statusLabel
+    ? `<div class="nm-dstat"><div class="l">Status</div><div class="v" style="font-size:13px;"><span class="pill ${esc(m.status||'')}">${esc(statusLabel)}</span>${iohPohPill}</div></div>`
+    : ''; // status genuinely unknown (live daily_positions shape) -- omit the stat rather than guess
   const stats = `<div class="nm-dstat-row">
     <div class="nm-dstat"><div class="l">Type</div><div class="v" style="font-size:13px;">${esc(m.typeName)}</div></div>
     <div class="nm-dstat"><div class="l">Division</div><div class="v" style="font-size:13px;">${esc(m.div)}</div></div>
-    <div class="nm-dstat"><div class="l">Status</div><div class="v" style="font-size:13px;"><span class="pill ${m.status}">${m.status==='working'?'Working':(m.iohPohType?('Under '+m.iohPohType):'Under Overhaul')}</span>${iohPohPill}</div></div>
+    ${statusStatRow}
   </div>`;
   const bullets = detailBulletsHtml(m);
   const bar = progressBarHtml(m);
   const lossHtml = lossReasonsHtml(m);
   const workDone = m.workDone ? `<div class="remarktext"><b>Work done today:</b><br>${esc(m.workDone)}</div>` : '';
   const confPill = `<span class="conf-pill ${conf}"><span class="ring"></span>${esc(CONF_LABEL[conf]||conf)}</span>`;
-  const src = `<div class="srcline">${confPill}<br><br>Position source: ${esc(m.source)}</div>`;
+  const src = `<div class="srcline">${confPill}<br><br>Position source: ${esc(m.source||'not available')}</div>`;
   const gotoBtn = `<button class="nm-gotoprogress" data-gotomachine="${esc(m.machine)}">View this machine's full-year Progress vs Target &rarr;</button>`;
   openDrawer(esc(m.machine), `Section: ${esc(m.block||'&mdash;')} &bull; Daily Progress as of ${esc(NMDATA.kpi.asOf||'')}`, back+gotoBtn+stats+bullets+bar+lossHtml+workDone+src);
   const backBtn = document.querySelector('#nmDBody [data-backto]');
@@ -8917,12 +8865,19 @@ function renderUnplaced(){
   if (!NMDATA.unmatched.length){ document.getElementById('nmUnplacedCard').style.display = 'none'; return; }
   document.getElementById('nmUnplacedCard').style.display = '';
   const reasonTxt = {no_code:'no station code extracted from today’s remark', station_not_found:'code not found in the RDPS survey, a known depot, or a web-geocoded match'};
-  document.getElementById('nmUnplacedList').innerHTML = NMDATA.unmatched.map(m=>`
+  document.getElementById('nmUnplacedList').innerHTML = NMDATA.unmatched.map(m=>{
+    // field-name compatibility: the old baked shape used snake_case
+    // `stabled_at`; the live networkMap payload (added 13-Nov-2026,
+    // sources/network_map.py) uses camelCase `stabledAt` like every
+    // other field it produces -- read whichever one this entry has.
+    const stabledTxt = m.stabledAt != null ? m.stabledAt : m.stabled_at;
+    return `
     <div class="nm-unplaced-row">
       <div><b>${esc(m.machine)}</b> &mdash; ${esc(m.typeName||m.type)} &bull; ${esc(m.div)} ${m.block?('&bull; '+esc(m.block)):''}
-        <div style="color:var(--muted); font-size:11px; margin-top:2px;">Logged as stabled at &ldquo;${esc(m.stabled_at||'&mdash;')}&rdquo;</div></div>
+        <div style="color:var(--muted); font-size:11px; margin-top:2px;">Logged as stabled at &ldquo;${esc(stabledTxt||'&mdash;')}&rdquo;</div></div>
       <div class="reason">${esc(reasonTxt[m.reason]||m.reason)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function initAll(){
@@ -8952,12 +8907,16 @@ function initAll(){
 //    startDashboard(), once the Supabase row has loaded) -- at which point
 //    exactly the same init path runs.
 let dataReady = false;
+// Fixed 13-Nov-2026 per Shruti: the map now lives inside the Overview tab
+// (no more standalone "SWR Network Map" nav button/module), so "is the map
+// currently supposed to be visible" means currentModule === 'overview' now,
+// not 'networkmap'.
 function tryInitAll(){
   if (!NMDATA || dataReady) return;
   dataReady = true;
   initAll();
-  const tabActiveNow = (typeof currentModule !== 'undefined' && currentModule === 'networkmap') ||
-    !!document.querySelector('#tabNav button[data-mod="networkmap"].active');
+  const tabActiveNow = (typeof currentModule !== 'undefined' && currentModule === 'overview') ||
+    !!document.querySelector('#tabNav button[data-mod="overview"].active');
   if (tabActiveNow) initMap();
 }
 
@@ -8967,28 +8926,64 @@ if (document.readyState === 'loading') {
   tryInitAll();
 }
 
-// Hook into the dashboard's own tab-redraw registry (chartDrawers / redrawCurrent,
-// defined in the main dashboard script that loads before this one) so the Leaflet
-// map is (re)initialized exactly when every other tab's charts are redrawn: on
-// first display, and again on every later visit (invalidateSize keeps it correctly
-// sized after being hidden). Falls back to a direct listener if that registry
-// isn't found, so this tab still works standalone. Both paths no-op harmlessly
-// if NMDATA isn't loaded yet (dynamic builds, before sign-in).
-if (typeof chartDrawers !== 'undefined') {
-  chartDrawers.networkmap = function(){ initMap(); };
-  if (typeof currentModule !== 'undefined' && currentModule === 'networkmap') initMap();
-} else {
-  document.getElementById('tabNav').addEventListener('click', e=>{
-    const btn = e.target.closest('button[data-mod="networkmap"]');
-    if (btn) setTimeout(initMap, 0);
-  });
-  if (document.querySelector('#tabNav button[data-mod="networkmap"].active')) initMap();
-}
+// Fixed 13-Nov-2026 per Shruti: hook the map's init into OVERVIEW's own
+// show/revisit lifecycle instead of a 'networkmap' chartDrawers key, which
+// no longer exists now that the map is relocated into Overview rather than
+// being its own tab. Every Overview revisit is already covered by
+// drawOverviewCharts() itself calling window.NM.initMap() (baked directly
+// into that function, in the main dashboard script's chartDrawers literal)
+// -- but that script runs, and calls chartDrawers.overview() for the very
+// first time, BEFORE this script tag (and therefore window.NM) exists, per
+// the project's own documented chartDrawers scope-bug precedent
+// (network-map-tab-concept.md): a post-hoc `chartDrawers.overview = ...`
+// reassignment here would itself have the same problem, since this whole
+// block can end up running inside index.html's startDashboard() function
+// scope once spliced in, not the bare top-level scope this template has.
+// So the first-load gap is covered explicitly right here instead, once
+// window.NM is guaranteed to exist (right below) -- initMap() is already
+// idempotent (see its own mapInited guard above), so calling it from both
+// places is safe.
+if (typeof currentModule !== 'undefined' && currentModule === 'overview') initMap();
+else if (document.querySelector('#tabNav button[data-mod="overview"].active')) initMap();
 
 // setData(): the one new entry point. Supplied with DATA.networkMap once the
 // Supabase-gated site's startDashboard() has loaded today's row -- sets
 // NMDATA and runs the exact same init path a baked build runs immediately.
-window.NM = { closeDrawer, initMap, setData: function(d){ if (d) NMDATA = d; tryInitAll(); } };
+//
+// Fixed 13-Nov-2026, found while wiring up the first-ever real
+// `networkMap` producer (sources/network_map.py): since NMDATA now
+// starts out BAKED (not null -- see the 13-Nov-2026 morning stopgap
+// fix above this script, kept as this page's own safety net), the
+// script-level tryInitAll() call a few lines up ALWAYS fires immediately
+// at page load, before sign-in, against that baked data -- which sets
+// `dataReady = true` for good. Previously that was harmless because
+// `d` (DATA.networkMap) was always undefined in production (nothing
+// had ever built it), so this setData call was always a silent no-op
+// anyway. Now that a real `d` can arrive after sign-in, the old
+// one-line version here would silently reassign the NMDATA *variable*
+// but never actually re-render anything -- tryInitAll()'s own
+// `dataReady` guard would just return immediately, leaving the stale
+// baked map/KPIs/drawers on screen forever. When a genuine live payload
+// arrives, this now forces one clean full re-render: static panels
+// (KPIs/chips/type filter/legend/unplaced list) via initAll(), and the
+// Leaflet map itself torn down and rebuilt from the new NMDATA (its own
+// `mapInited` guard is reset together with disposing the old map
+// instance, so initMap() doesn't just no-op and resize the stale one).
+// When `d` is falsy (no live payload this run, the honest-degradation
+// case), this does nothing new -- the already-rendered baked fallback
+// just keeps showing, exactly as the 13-Nov-2026 morning fix intended.
+window.NM = { closeDrawer, initMap, setData: function(d){
+  if (!d) { tryInitAll(); return; }
+  NMDATA = d;
+  dataReady = false;
+  initAll();
+  dataReady = true;
+  if (nmMap) { nmMap.remove(); nmMap = null; }
+  mapInited = false;
+  const tabActiveNow = (typeof currentModule !== 'undefined' && currentModule === 'overview') ||
+    !!document.querySelector('#tabNav button[data-mod="overview"].active');
+  if (tabActiveNow) initMap();
+} };
 })();
 
 
@@ -9021,8 +9016,9 @@ window.NM = { closeDrawer, initMap, setData: function(d){ if (d) NMDATA = d; try
   function indentGroups(){ return (typeof IP_AUTHORITY_GROUPS!=='undefined' && IP_AUTHORITY_GROUPS) ? IP_AUTHORITY_GROUPS : []; }
 
   const MOD_INFO = [
-    {mod:'overview', label:'Overview', names:['overview','home','main tab']},
-    {mod:'networkmap', label:'SWR Network Map', names:['network map','swr network map','map']},
+    // 'network map'/'map' folded in here 13-Nov-2026 (per Shruti) -- the map
+    // moved into the bottom of Overview, it no longer has its own tab/mod.
+    {mod:'overview', label:'Overview', names:['overview','home','main tab','network map','swr network map','map']},
     {mod:'progress', label:'Progress vs Target', names:['progress vs target','cumulative progress','progress tab']},
     {mod:'shortfall', label:'Reason for Shortfall', names:['reason for shortfall','shortfall reasons','shortfall tab']},
     {mod:'exceptions', label:'Exceptions & Downtime', names:['exceptions','downtime','exception sheet']},
@@ -9447,6 +9443,5 @@ window.NM = { closeDrawer, initMap, setData: function(d){ if (d) NMDATA = d; try
   }
 })();
 </script>
-
 </body>
 </html>
