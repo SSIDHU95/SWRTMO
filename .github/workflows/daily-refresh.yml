@@ -1,0 +1,101 @@
+name: SAMARTH daily data refresh
+
+# Runs the live Supabase-backed aggregation pipeline (pipeline/aggregate.py)
+# and pushes its output to the `dashboard_payload` table the SAMARTH
+# website (index.html) reads from. This is the automated replacement for
+# the one-off manual `curl` pushes documented in this project's history --
+# see claude/supabase-live-deployment-notes.md's "Daily automation"
+# section for why this had to move here: Claude's own safety system
+# blocks storing a service_role key anywhere for later unattended re-use,
+# so the key lives only in this repo's own GitHub Actions Secrets, never
+# inside a Claude session or chat.
+#
+# ---------------------------------------------------------------------
+# ONE-TIME SETUP (done once, by a human, in this repo's own settings --
+# Claude cannot do any of this: it has no GitHub write access):
+#
+# 1. Add this pipeline's code to the repo under pipeline/ (see
+#    pipeline/README.md for the exact file list and layout).
+# 2. Settings -> Secrets and variables -> Actions -> New repository secret,
+#    three times:
+#      SUPABASE_URL                e.g. https://xxxxx.supabase.co
+#      SUPABASE_ANON_KEY           the anon/public key (read-only; every
+#                                   sync table grants it SELECT)
+#      SUPABASE_SERVICE_ROLE_KEY   the service_role key (write access to
+#                                   dashboard_payload only -- this is the
+#                                   one that was already created for the
+#                                   earlier manual-push era; reuse it)
+# 3. That's it -- no further manual steps. This workflow runs itself daily
+#    from here on, and "Run workflow" below also lets a human trigger an
+#    out-of-schedule refresh at any time.
+# ---------------------------------------------------------------------
+on:
+  schedule:
+    # 04:30 UTC = ~10:00 AM IST, matching the existing claude.ai Artifact's
+    # own daily-refresh cadence (see supabase-live-deployment-notes.md) so
+    # the live website and the Artifact snapshot stay on the same rhythm.
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: 'Override the as-of date (YYYY-MM-DD). Leave blank to use today.'
+        required: false
+        default: ''
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          # No requirements.txt / pip install step on purpose: every file
+          # under pipeline/ uses only the Python standard library
+          # (urllib for the Supabase REST calls, no openpyxl/python-docx
+          # -- those were only ever needed by the OLD local-file pipeline,
+          # run_pipeline.py, not by this live-Supabase one).
+
+      - name: Run pipeline_helpers unit tests (CI smoke check)
+        working-directory: pipeline
+        run: |
+          # The adapter-fixture and end-to-end classes in test_integrity.py
+          # skip themselves automatically here (no cached /tmp/*_latest.json
+          # fixtures exist on a CI runner, and this step has no Supabase
+          # credentials either) -- only the pure, network-free
+          # TestPipelineHelpers class actually runs, as a fast sanity check
+          # that nothing in pipeline_helpers.py is broken before spending a
+          # live Supabase round-trip on a run that would just fail anyway.
+          python3 -m unittest tests.test_integrity -v
+
+      - name: Build dashboard_payload.json from live Supabase sources
+        working-directory: pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          AS_OF_ARGS=""
+          if [ -n "${{ github.event.inputs.as_of }}" ]; then
+            AS_OF_ARGS="--as-of ${{ github.event.inputs.as_of }}"
+          fi
+          python3 aggregate.py /tmp/samarth_out $AS_OF_ARGS
+
+      - name: Push to Supabase (dashboard_payload table)
+        working-directory: pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 push_to_supabase.py /tmp/samarth_out/dashboard_payload.json
+
+      - name: Upload payload as a build artifact (for inspection / debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard_payload-${{ github.run_id }}
+          path: /tmp/samarth_out/dashboard_payload.json
+          retention-days: 14
