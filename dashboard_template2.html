@@ -1495,7 +1495,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
          lifecycle (see drawOverviewCharts() and the NM IIFE's own bottom
          hook) changed, not the map's internals. ============ -->
     <div id="mod-networkmap">
-      <div class="nm-kpirow" id="nmKpiRow"></div>
 
       <div class="card">
         <div class="cardhead">
@@ -3087,11 +3086,13 @@ function openMachinesWorkingDrawer(){
 // ---------------------------------------------------------------------
 function openIohPohDrawer(){
   const rows = DATA.exceptions.iohPohReconciled;
-  const stale = DATA.exceptions.iohPohStale || [];
-  const cpOnly = DATA.exceptions.iohPohCpOnlyUnconfirmed || [];
   const day = DATA.exceptions.latestDayLabel || 'latest snapshot';
-  const html = statRow([{l:'Under IOH/POH', v: rows.length}, {l:'Not in today\'s Exception Sheet', v: stale.length + cpOnly.length}]) +
-    dcard('How this list is built', null, `<div class="dcap">The ${esc(day)} Exception Sheet is the sole source for "currently under IOH/POH" — a machine only appears here if it's flagged there today. A Cumulative Progress Status flag not confirmed in today's Exception Sheet is excluded from this list and count, and shown separately below instead.</div>`) +
+  // Per Shruti (14-Nov-2026): show only the currently-under-IOH/POH list as
+  // taken from the Exception Sheet -- the "cleared as completed" and
+  // "flagged in Cumulative Progress, unconfirmed" side-lists were removed
+  // from this drawer (the Exception Sheet is the sole source of truth here).
+  const html = statRow([{l:'Under IOH/POH', v: rows.length}]) +
+    dcard('How this list is built', null, `<div class="dcap">The ${esc(day)} Exception Sheet is the sole source for "currently under IOH/POH" — a machine only appears here if it's flagged there today.</div>`) +
     rows.map(r=>{
       const id = 'ip'+Math.random().toString(36).slice(2,9);
       const m = DATA.progress.machines.find(x=>x.machine===r.Machine || x.machine===String(r.Machine).replace(' ','-'));
@@ -3102,11 +3103,7 @@ function openIohPohDrawer(){
         <div class="dmmeta">${r.StartDate?('Since '+esc(r.StartDate)+(r.ExpectedCompletion?(' &rarr; '+esc(r.ExpectedCompletion)):'')):''}${m&&m.iohPohDays!=null?(' &bull; <b>'+(m.iohPohDaysElapsed??'—')+' of '+m.iohPohDays+' days</b> designated'):(r.DaysUnder!=null?(' &bull; '+r.DaysUnder+' days'):'')}</div>
       </div>`;
     }).join('');
-  const staleHtml = stale.length ? dcard('Cleared as completed (data-currency fix)', 'Cumulative Progress still flagged these, but the IOH/POH Planning sheet confirms they finished and today\'s Exception Sheet has already dropped them',
-    stale.map(r=>`<div class="dmachine-card" style="cursor:default;"><div class="dmtop"><span class="dmname">${esc(r.Machine)}</span><span class="dbadge good">completed ${esc(r.CompletionDate)}</span></div><div class="dmmeta">${esc(r.Note)}</div></div>`).join('')) : '';
-  const cpOnlyHtml = cpOnly.length ? dcard('Flagged in Cumulative Progress, not in today\'s Exception Sheet', 'No completion date on record either — excluded from the count above until the Exception Sheet confirms one way or the other',
-    cpOnly.map(r=>`<div class="dmachine-card" style="cursor:default;"><div class="dmtop"><span class="dmname">${esc(r.Machine)}</span><span class="dbadge warn">${esc(r.Status||'—')}, unconfirmed</span></div><div class="dmmeta">${esc(r.Note)}</div></div>`).join('')) : '';
-  openDrawer('Under IOH/POH — Exception Sheet', `${rows.length} machines &bull; click one for full detail`, html + staleHtml + cpOnlyHtml);
+  openDrawer('Under IOH/POH — Exception Sheet', `${rows.length} machines &bull; click one for full detail`, html);
 }
 
 function openDeputedOutDrawer(){
@@ -8110,19 +8107,10 @@ function depotGlyphSvg(){ return `<svg viewBox="0 0 16 16">${DEPOT_GLYPH}</svg>`
 function catColor(cat){ return (NMDATA.catMeta[cat]||NMDATA.catMeta.other).color; }
 const SHORT_DIV_LABEL = {UBL:'UBL', SBC:'SBC', MYS:'MYS', SHARED:'Depots'};
 
-function renderKpis(){
-  const k = NMDATA.kpi;
-  const items = [
-    {lbl:'Machines in today’s Daily Progress', val:k.total, hint:'All 3 divisions'},
-    {lbl:'Placed on map', val:k.placed, hint: k.unplaced ? `${Math.round(100*k.placed/k.total)}% placed &mdash; ${k.unplaced} left off, see below` : 'All of them &mdash; none left pending'},
-    {lbl:'Machine types seen today', val:k.types, hint:'Each coloured &amp; iconed by Tamping / Non-Tamping'},
-    {lbl:'Tamping / Non-Tamping', val:`${k.tamping} / ${k.nontamping}`, hint:'Per the dashboard’s own Progress vs Target classification'},
-    {lbl:'By division', val:`${k.divCounts.UBL||0} &middot; ${k.divCounts.SBC||0} &middot; ${k.divCounts.MYS||0}`, hint:'UBL &middot; SBC &middot; MYS'},
-  ];
-  document.getElementById('nmKpiRow').innerHTML = items.map(it=>`
-    <div class="nm-kpi"><div class="lbl">${it.lbl}</div><div class="val num">${it.val}</div><div class="hint">${it.hint}</div></div>
-  `).join('');
-}
+// renderKpis()/the nm-kpirow (Machines in Today's Daily Progress / Placed on
+// Map / Machine Types Seen Today / Tamping-Non-Tamping / By Division) was
+// removed per Shruti: "these aren't needed." NMDATA.kpi itself is untouched
+// (still computed, just unused by the UI).
 
 let nmMap, markerLayer, polyLayers = {}, allMarkers = [], mapInited = false;
 const activeDivs = new Set(['UBL','SBC','MYS','SHARED']);
@@ -8627,7 +8615,6 @@ function renderUnplaced(){
 }
 
 function initAll(){
-  renderKpis();
   renderChips();
   renderTypeFilter();
   renderSrdenJump();
