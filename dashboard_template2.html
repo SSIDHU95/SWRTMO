@@ -1495,7 +1495,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
          lifecycle (see drawOverviewCharts() and the NM IIFE's own bottom
          hook) changed, not the map's internals. ============ -->
     <div id="mod-networkmap">
-      <div class="nm-kpirow" id="nmKpiRow"></div>
 
       <div class="card">
         <div class="cardhead">
@@ -2933,9 +2932,33 @@ function openMachineDetailDrawer(machineName){
   const mKeyUnambiguous = ensureMachineKeyIndex()[mKey] === m.machine;
   const excRows = (DATA.exceptions.latest||[]).filter(e=> e.Machine===m.machine || (mKeyUnambiguous && machineKeyJs(e.Machine)===mKey));
   const sfEntries = (DATA.shortfall.catMachine? Object.entries(DATA.shortfall.catMachine).filter(([cat,list])=>list.some(x=>x[0]===m.machine)) : []);
+  // Consistency fix, 14-Nov-2026 (per Shruti: opening an individual machine's
+  // own drawer showed only "No open exception logged", with no sign of an
+  // active IOH/POH case that the machine-type drill-down's own remark card
+  // (fixed earlier today) was already showing for this same machine).
+  // excRows above only ever checks DATA.exceptions.latest; it never
+  // consulted DATA.exceptions.iohPohReconciled -- the exact, already-correct
+  // source the type-level remark card reads (today's Exception Sheet,
+  // reconciled against Cumulative Progress Status). Checking it here too,
+  // with the same elapsed/designated logic that card already uses, means
+  // this panel can no longer disagree with it for the same machine.
+  const iohPohReconciledRow = (DATA.exceptions.iohPohReconciled||[]).find(r=> r.Machine===m.machine || (mKeyUnambiguous && machineKeyJs(r.Machine)===mKey));
+  const iohPohAlreadyInExcRows = iohPohReconciledRow && excRows.some(e=> e.Machine===iohPohReconciledRow.Machine);
+  let iohPohIssueCard = '';
+  if (iohPohReconciledRow && !iohPohAlreadyInExcRows){
+    const elapsed = (m.iohPohDaysElapsed!=null) ? m.iohPohDaysElapsed : iohPohReconciledRow.DaysUnder;
+    const designated = (m.iohPohDays!=null) ? m.iohPohDays : null;
+    const over = designated!=null && elapsed!=null && elapsed>designated;
+    iohPohIssueCard = `<div class="dmachine-card" style="cursor:default;">
+      <div class="dmtop"><span class="dmname">IOH/POH</span><span class="dbadge ${iohPohReconciledRow.Status==='IOH'?'warn':'bad'}">${esc(iohPohReconciledRow.Status||'IOH/POH')}</span></div>
+      <div class="dmmeta">${esc(iohPohReconciledRow.Division||m.workingAt||m.div||'')}${iohPohReconciledRow.StartDate?(' &bull; since '+esc(iohPohReconciledRow.StartDate)):''}${iohPohReconciledRow.ExpectedCompletion?(' &rarr; '+esc(iohPohReconciledRow.ExpectedCompletion)):''}</div>
+      <div class="dmmeta"${over?' style="color:var(--bad)"':''}><b>${elapsed??'—'} of ${designated??'—'} days</b> designated${over?' &bull; overdue':''}</div>
+    </div>`;
+  }
   html += dcard('Issue history', null,
+    iohPohIssueCard +
     (excRows.length? excRows.map(e=>`<div class="dmachine-card" style="cursor:default;"><div class="dmtop"><span class="dmname">${esc(e.Category)}</span><span class="dbadge bad">${e.DaysUnder??'—'}d</span></div><div class="dmmeta">Not working since ${esc(e.UnderSince||'—')} &bull; ${esc(e.Location||'')}</div><div class="eremark" style="margin-top:4px;">${esc(e.Remarks||'')}</div></div>`).join('')
-      : `<div class="dcap">No open exception logged for this machine as of ${esc((DATA.exceptions.latestDayLabel)||'the latest snapshot')}.</div>`) +
+      : (iohPohIssueCard ? '' : `<div class="dcap">No open exception logged for this machine as of ${esc((DATA.exceptions.latestDayLabel)||'the latest snapshot')}.</div>`)) +
     (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} shortfall log).</div>` : '')
   );
 
@@ -3388,7 +3411,16 @@ function injectDownloadButtons(){
 function renderKpis(){
   const sc = DATA.meta.statusCounts;
   const active = sc.Active||0;
-  const iohpoh = DATA.meta.iohPohReconciledCount!=null ? DATA.meta.iohPohReconciledCount : ((sc.IOH||0)+(sc.POH||0));
+  // 14-Nov-2026: this tile was reading DATA.meta.iohPohReconciledCount, a
+  // field run_pipeline.py (the claude.ai Artifact's pipeline) happens to
+  // also set alongside the authoritative one, but which this website's own
+  // aggregate.py cannot be relied on to populate -- the Exceptions tab's own
+  // "Under IOH/POH (Exception Sheet)" KPI and the machine-type drill-down's
+  // IOH/POH remark card (both fixed earlier today) read DATA.exceptions.
+  // iohPohReconciledCount / DATA.exceptions.iohPohReconciled instead, so
+  // this tile now checks that same, already-correct field first.
+  const iohpoh = (DATA.exceptions && DATA.exceptions.iohPohReconciledCount!=null) ? DATA.exceptions.iohPohReconciledCount
+    : (DATA.meta.iohPohReconciledCount!=null ? DATA.meta.iohPohReconciledCount : ((sc.IOH||0)+(sc.POH||0)));
   const deputed = Object.keys(sc).filter(k=>k.startsWith('Deputed')).reduce((s,k)=>s+sc[k],0);
   const dr = DATA.progress.divRollup;
   const totalActual = dr.reduce((s,d)=>s+d.actualToDate,0);
@@ -8110,19 +8142,11 @@ function depotGlyphSvg(){ return `<svg viewBox="0 0 16 16">${DEPOT_GLYPH}</svg>`
 function catColor(cat){ return (NMDATA.catMeta[cat]||NMDATA.catMeta.other).color; }
 const SHORT_DIV_LABEL = {UBL:'UBL', SBC:'SBC', MYS:'MYS', SHARED:'Depots'};
 
-function renderKpis(){
-  const k = NMDATA.kpi;
-  const items = [
-    {lbl:'Machines in today’s Daily Progress', val:k.total, hint:'All 3 divisions'},
-    {lbl:'Placed on map', val:k.placed, hint: k.unplaced ? `${Math.round(100*k.placed/k.total)}% placed &mdash; ${k.unplaced} left off, see below` : 'All of them &mdash; none left pending'},
-    {lbl:'Machine types seen today', val:k.types, hint:'Each coloured &amp; iconed by Tamping / Non-Tamping'},
-    {lbl:'Tamping / Non-Tamping', val:`${k.tamping} / ${k.nontamping}`, hint:'Per the dashboard’s own Progress vs Target classification'},
-    {lbl:'By division', val:`${k.divCounts.UBL||0} &middot; ${k.divCounts.SBC||0} &middot; ${k.divCounts.MYS||0}`, hint:'UBL &middot; SBC &middot; MYS'},
-  ];
-  document.getElementById('nmKpiRow').innerHTML = items.map(it=>`
-    <div class="nm-kpi"><div class="lbl">${it.lbl}</div><div class="val num">${it.val}</div><div class="hint">${it.hint}</div></div>
-  `).join('');
-}
+// renderKpis()/the nm-kpirow (Machines in Today's Daily Progress / Placed on
+// Map / Machine Types Seen Today / Tamping-Non-Tamping / By Division) was
+// removed 14-Nov-2026 per Shruti: "these aren't needed" -- the map's KPI
+// numbers (NMDATA.kpi) are left on the data object, unused by the UI, in
+// case a future round wants a subset of them back.
 
 let nmMap, markerLayer, polyLayers = {}, allMarkers = [], mapInited = false;
 const activeDivs = new Set(['UBL','SBC','MYS','SHARED']);
@@ -8627,7 +8651,6 @@ function renderUnplaced(){
 }
 
 function initAll(){
-  renderKpis();
   renderChips();
   renderTypeFilter();
   renderSrdenJump();
