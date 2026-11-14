@@ -73,13 +73,15 @@ jobs:
           # fixtures exist on a CI runner, and this step has no Supabase
           # credentials either) -- only the pure, network-free tests
           # actually run, as a fast sanity check that nothing in
-          # pipeline_helpers.py/network_map.py/daily_progress_srden.py is
-          # broken before spending a live Supabase round-trip on a run that
-          # would just fail anyway. Fixed 14-Nov-2026: this used to run
-          # only tests.test_integrity - now also runs test_network_map and
-          # test_daily_progress_srden, both added since this file was last
-          # updated, so a regression in either would have gone uncaught.
-          python3 -m unittest tests.test_integrity tests.test_network_map tests.test_daily_progress_srden -v
+          # pipeline_helpers.py/network_map.py/daily_progress_srden.py/
+          # daily_positions.py is broken before spending a live Supabase
+          # round-trip on a run that would just fail anyway. Fixed
+          # 14-Nov-2026 (second round): added test_daily_positions,
+          # covering the same day's fix to extract_positions()'s own
+          # dict key (it used to collapse two distinct real machines,
+          # e.g. the two separate T-28 units, onto the same key -- see
+          # that module's docstring).
+          python3 -m unittest tests.test_integrity tests.test_network_map tests.test_daily_progress_srden tests.test_daily_positions -v
 
       - name: Build dashboard_payload.json from live Supabase sources
         working-directory: pipeline
