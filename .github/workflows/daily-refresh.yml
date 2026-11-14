@@ -1,4 +1,4 @@
-name: SAMARTH daily data refresh old
+name: SAMARTH daily data refresh
 
 # Runs the live Supabase-backed aggregation pipeline (pipeline/aggregate.py)
 # and pushes its output to the `dashboard_payload` table the SAMARTH
@@ -45,7 +45,12 @@ on:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Fixed 14-Nov-2026: raised from 10 - the rdps_points pagination fix
+    # (supabase_client.fetch_rows() now pages through Supabase's 1000-row-
+    # per-request cap instead of silently truncating) adds a real ~2
+    # minutes to every run for that one table's ~430,000 rows alone, so
+    # the old 10-minute ceiling left very little margin.
+    timeout-minutes: 15
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -60,17 +65,21 @@ jobs:
           # -- those were only ever needed by the OLD local-file pipeline,
           # run_pipeline.py, not by this live-Supabase one).
 
-      - name: Run pipeline_helpers unit tests (CI smoke check)
+      - name: Run unit tests (CI smoke check)
         working-directory: pipeline
         run: |
           # The adapter-fixture and end-to-end classes in test_integrity.py
           # skip themselves automatically here (no cached /tmp/*_latest.json
           # fixtures exist on a CI runner, and this step has no Supabase
-          # credentials either) -- only the pure, network-free
-          # TestPipelineHelpers class actually runs, as a fast sanity check
-          # that nothing in pipeline_helpers.py is broken before spending a
-          # live Supabase round-trip on a run that would just fail anyway.
-          python3 -m unittest tests.test_integrity -v
+          # credentials either) -- only the pure, network-free tests
+          # actually run, as a fast sanity check that nothing in
+          # pipeline_helpers.py/network_map.py/daily_progress_srden.py is
+          # broken before spending a live Supabase round-trip on a run that
+          # would just fail anyway. Fixed 14-Nov-2026: this used to run
+          # only tests.test_integrity - now also runs test_network_map and
+          # test_daily_progress_srden, both added since this file was last
+          # updated, so a regression in either would have gone uncaught.
+          python3 -m unittest tests.test_integrity tests.test_network_map tests.test_daily_progress_srden -v
 
       - name: Build dashboard_payload.json from live Supabase sources
         working-directory: pipeline
