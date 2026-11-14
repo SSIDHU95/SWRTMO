@@ -8660,6 +8660,69 @@ function machineStatusLabel(m){
   if (m.status === 'under_overhaul') return m.iohPohType ? ('Under '+m.iohPohType) : 'Under Overhaul';
   return null;
 }
+// Added 15-Nov-2026: the sheet's "Block availed From/To" columns store a
+// clock time as a bare decimal where the digits AFTER the point are
+// MINUTES, not a fraction of an hour (8.45 means 8:45, not 8 hours 27
+// minutes) -- same convention this file already documented for the old
+// baked snapshot's timeFrom/timeTo fields (see detailBulletsHtml's own
+// 19-Oct-2026 NOTE a little further down). Converts to a plain "HH:MM"
+// string for display.
+function fmtHHMM(v){
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  if (!isFinite(n)) return String(v);
+  const h = Math.floor(n);
+  const mins = Math.round((n - h) * 100);
+  return String(h).padStart(2,'0') + ':' + String(mins).padStart(2,'0');
+}
+
+// Added 15-Nov-2026, per Shruti's request to show each machine's "last
+// working details" in the map drawer again, now that
+// sources/network_map.py / sources/daily_positions.py genuinely carry
+// that detail live (see those modules' own 14-Nov-2026 docstring
+// entries for exactly which sheet column each field below comes from).
+// This maps the LIVE field names onto the OLD baked-snapshot field
+// names detailBulletsHtml()/progressBarHtml() below already know how to
+// render -- those two functions are UNCHANGED from the baked-snapshot
+// era; only this adapter is new, so a live machine object "just works"
+// with them again without touching their own display logic. Mutates
+// and returns `m`; safe to call more than once on the same object
+// (every check is `=== undefined`, so it never overwrites a value this
+// function itself already set, or a genuine value from elsewhere).
+//
+// Still genuinely unavailable from this live source (left unmapped, so
+// the relevant row/section simply stays hidden, same as before this
+// change): corridorTiming, srDen (lives in a separate Supabase table,
+// daily_progress_srden, not joined onto this map payload), dutyStart/
+// dutyEnd as their own fields (duty times are folded into the sheet's
+// free-text Remarks instead, which is where workDone below actually
+// comes from), status/iohPohType, and lossReasons (the 10-category
+// loss breakdown -- a different source, shortfall_reasons, not yet
+// wired into this payload at all).
+function liveDetailAliases(m){
+  if (!m || m._liveAliased) return m;
+  m._liveAliased = true;
+  if (m.block === undefined && m.blockSection !== undefined) m.block = m.blockSection;
+  if (m.line === undefined && m.majorSection !== undefined) m.line = m.majorSection;
+  if (m.kmFrom === undefined && m.locationFrom !== undefined) m.kmFrom = m.locationFrom;
+  if (m.kmTo === undefined && m.locationTo !== undefined) m.kmTo = m.locationTo;
+  if (m.timeFrom === undefined && m.blockAvailedFrom != null) m.timeFrom = fmtHHMM(m.blockAvailedFrom);
+  if (m.timeTo === undefined && m.blockAvailedTo != null) m.timeTo = fmtHHMM(m.blockAvailedTo);
+  if (m.blockGrantedGross === undefined && m.totalBlockGross !== undefined) m.blockGrantedGross = m.totalBlockGross;
+  if (m.blockGrantedEff === undefined && m.totalBlockEffective !== undefined) m.blockGrantedEff = m.totalBlockEffective;
+  if (m.durationMin === undefined && m.durationMinutes !== undefined) m.durationMin = m.durationMinutes;
+  if (m.effBlockMin === undefined && m.effBlockMinutes !== undefined) m.effBlockMin = m.effBlockMinutes;
+  if (m.ineffectiveMin === undefined && m.durationMinutes != null && m.effBlockMinutes != null){
+    const ineff = Math.round(m.durationMinutes - m.effBlockMinutes);
+    if (ineff >= 0) m.ineffectiveMin = ineff;
+  }
+  if (m.stipulatedKm === undefined && m.stipulatedTotal !== undefined) m.stipulatedKm = m.stipulatedTotal;
+  if (m.actualKm === undefined && m.actualTotal !== undefined) m.actualKm = m.actualTotal;
+  if (m.pctAchieved === undefined && typeof m.pctActualVsStipulated === 'number') m.pctAchieved = Math.round(m.pctActualVsStipulated * 100);
+  if (m.workDone === undefined && m.remarks) m.workDone = m.remarks;
+  return m;
+}
+
 function machineStatusPillHtml(m){
   const label = machineStatusLabel(m);
   return label ? `<span class="pill ${esc(m.status||'')}">${esc(label)}</span>` : '';
@@ -8962,6 +9025,13 @@ else if (document.querySelector('#tabNav button[data-mod="overview"].active')) i
 window.NM = { closeDrawer, initMap, setData: function(d){
   if (!d) { tryInitAll(); return; }
   NMDATA = d;
+  // Added 15-Nov-2026: run every machine object through liveDetailAliases()
+  // exactly once here, centrally, so both the station-list preview
+  // (openStationDrawer's mini-cards) and the full machine detail drawer
+  // (openMachineDrawer) pick up the live "last working details" fields
+  // without each render call site needing to remember to do it itself.
+  Object.values(NMDATA.stations || {}).forEach(st => (st.machines || []).forEach(liveDetailAliases));
+  (NMDATA.unmatched || []).forEach(liveDetailAliases);
   dataReady = false;
   initAll();
   dataReady = true;
