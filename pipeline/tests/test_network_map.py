@@ -68,7 +68,9 @@ def synthetic_positions_payload():
     unmatched machine."""
     return dict(asOfDate='13.11.2026', machineCount=6, machines=[
         dict(machine='Machine', div='', stabledAt='STABLED AT'),       # header leakage -> must be dropped
-        dict(machine='BCM 001', div='UBL', stabledAt='AAA'),            # exact match
+        dict(machine='BCM 001', div='UBL', stabledAt='AAA',             # exact match, WITH detail fields
+             blockSection='AAA-BBB', majorSection='UBL-MRJ', durationMinutes=105.0,
+             actualTotal=0.7, remarks='Night: 700 mtrs tamped.'),
         dict(machine='DUO 002', div='UBL', stabledAt='BBB/CCC'),        # slash-coded, BBB should win (first part)
         dict(machine='MPT 003', div='MYS', stabledAt='DDD'),            # exact match, different division
         dict(machine='UTV 004', div='SBC', stabledAt='ZZZ-UNKNOWN'),    # no station anywhere -> unmatched
@@ -269,15 +271,35 @@ class TestBuildNetworkMapEndToEnd(unittest.TestCase):
         self.assertEqual(by_name['RMV 005']['reason'], 'no_code')
 
     def test_placed_machine_entries_carry_only_the_honest_live_fields(self):
+        # BCM 001 (station AAA) is the one synthetic machine given detail
+        # fields -- fixed 14-Nov-2026: these are now expected to come
+        # through (see daily_positions.DETAIL_FIELDS), on top of the
+        # original base fields.
         m = self.result['stations']['AAA']['machines'][0]
         self.assertEqual(set(m.keys()), {'machine', 'type', 'typeName', 'cat', 'div', 'stabledAt',
-                                          'station', 'posConfidence', 'source'})
-        # explicitly must NOT carry any of the old baked snapshot's rich
-        # work-detail fields -- this is the honest-degradation contract.
-        for stale_field in ('block', 'line', 'corridorTiming', 'kmFrom', 'kmTo',
-                             'stipulatedKm', 'actualKm', 'pctAchieved', 'dutyStart',
-                             'lossReasons', 'workDone', 'srDen', 'iohPohType', 'status'):
+                                          'station', 'posConfidence', 'source',
+                                          'blockSection', 'majorSection', 'durationMinutes',
+                                          'actualTotal', 'remarks'})
+        self.assertEqual(m['blockSection'], 'AAA-BBB')
+        self.assertEqual(m['actualTotal'], 0.7)
+        # explicitly must still NOT carry any of the OLD baked snapshot's
+        # fields that remain genuinely unavailable -- this is the
+        # still-standing part of the honest-degradation contract (see
+        # this module's docstring's "Still genuinely absent" paragraph).
+        for stale_field in ('corridorTiming', 'kmFrom', 'kmTo', 'stipulatedKm', 'actualKm',
+                             'pctAchieved', 'dutyStart', 'lossReasons', 'workDone', 'srDen',
+                             'iohPohType', 'status'):
             self.assertNotIn(stale_field, m)
+
+    def test_placed_machine_without_detail_fields_does_not_fabricate_them(self):
+        # DUO 002 (station BBB/CCC match) was given no detail fields in
+        # the synthetic fixture -- must come through with only the base
+        # fields, not nulls for every DETAIL_FIELDS entry.
+        m = self.result['stations']['BBB']['machines'][0]
+        self.assertEqual(m['machine'], 'DUO 002')
+        import sources.daily_positions as daily_positions
+        for field in daily_positions.DETAIL_FIELDS:
+            self.assertNotIn(field, m)
 
     def test_top_level_shape_is_self_contained_for_the_dynamic_index_html_path(self):
         for key in ('mtype', 'catMeta', 'divColor', 'divName', 'typeGroup', 'kpi'):
