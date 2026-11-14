@@ -60,23 +60,35 @@ terms): the OLD baked machine entries carried rich per-machine work-
 detail fields (block, line, corridorTiming, km/time ranges, stipulated
 vs actual km, duty hours, loss reasons, work-done narrative, Sr.DEN,
 working/under-overhaul status, IOH/POH type) sourced from a one-off
-Daily Progress PDF/Excel parse that has NO live Supabase sync today --
-the exact same category of gap as Task #53's still-open Daily Progress
-shortfall-category log. The live `daily_positions` table only ever
-gives {machine, div, stabledAt} per machine. Per-machine entries built
-here carry only what is genuinely live or safely derivable from it:
-machine, type/typeName/cat (derived via pipeline_helpers.mtype_of() +
-TAMPING_INFO -- the dashboard's own definitive classification, static
-reference data, not fabricated per-machine detail), div, stabledAt,
-station (if matched), posConfidence, and source (the matched station's
-own position-source note). Nothing here invents a value this live
-source doesn't actually have -- status/iohPohType/block/line/
-corridorTiming/srDen/lossReasons/workDone/progress-km fields are simply
-absent from these entries; the template's drawer-rendering JS was
-updated the same day to show that absence gracefully (no pill claiming
-a known working/overhaul state when none is known) rather than
-defaulting to a wrong guess. See claude/supabase-live-deployment-
-notes.md's 13-Nov-2026 entry for the exact template-side changes.
+Daily Progress PDF/Excel parse that had no live Supabase sync at all on
+13-Nov-2026. Per-machine entries built here on that date carried only
+machine/type/typeName/cat/div/stabledAt/station/posConfidence/source --
+nothing invented, everything else simply absent.
+
+UPDATED 14-Nov-2026: daily_progress_sync.gs now reads the sheet's full
+per-machine row, not just Stabled At (see that script's own OFFSETS
+comment, and sources/daily_positions.py's DETAIL_FIELDS), so the
+`daily_positions` table -- and therefore this module's per-machine
+entries -- genuinely DO carry the day's real working detail now: which
+section/block the machine worked (or "At <station>" if it was idle/
+stabled rather than working), how much block time was granted vs
+actually used (gross/effective minutes), stipulated vs actual progress
+for the day, the cumulative-for-month figures, and the sheet's own
+free-text remark. These are copied straight through from
+daily_positions.extract_positions()'s DETAIL_FIELDS onto each placed/
+unmatched entry below -- unchanged field names, so the template reads
+them directly off each machine object. A field is simply absent from a
+machine's entry on any day the sync could not locate that division's
+Stabled At column (the one case daily_progress_sync.gs itself already
+treats as a degrade-gracefully fallback) -- never a fabricated null.
+
+Still genuinely absent, and NOT part of this update: corridorTiming
+(multi-spell timing breakdown -- only the day's first spell/row is
+read, see daily_progress_sync.gs's own file-header comment for why
+that's sufficient for the TOTAL figures), Sr.DEN (that's
+daily_progress_srden.py's own separate table, not joined onto these
+entries here), and the categorised (not free-text) shortfall reason --
+Task #53, still open.
 
 mtype/catMeta/divColor/divName/typeGroup/kpi ARE computed here. As of
 the 13-Nov-2026 morning round (before this task), `index.html`'s own
@@ -474,10 +486,12 @@ def build_network_map(rdps_rows, positions_payload):
 
     Each per-machine entry under a station's `machines` list, and each
     entry in `unmatched`, carries {machine, type, typeName, cat, div,
-    stabledAt, station?, posConfidence?, source?, reason?} -- see the
-    module docstring's "HONEST DEGRADATION" section for exactly which
-    rich fields the old baked snapshot had that these deliberately do
-    not, and why.
+    stabledAt, station?, posConfidence?, source?, reason?} plus -- as of
+    14-Nov-2026 -- whichever of daily_positions.DETAIL_FIELDS that
+    machine's row actually had (blockSection, majorSection, block/
+    duration/progress figures, remarks, etc. -- see this module's
+    "HONEST DEGRADATION" docstring section above for the exact list and
+    what is still genuinely absent).
 
     Also returns mtype/catMeta/divColor/divName/typeGroup/kpi, making
     this payload fully self-contained -- see the module docstring for
@@ -502,6 +516,14 @@ def build_network_map(rdps_rows, positions_payload):
         mtype = _machine_type(machine)
         entry = dict(machine=machine, type=mtype, typeName=_type_name(mtype), cat=_cat_of(mtype),
                      div=div, stabledAt=stabled_at)
+        # Added 14-Nov-2026: the day's real working-detail fields, when
+        # the live sync could read them (see this module's "HONEST
+        # DEGRADATION" docstring entry above) -- copied straight through
+        # rather than re-derived, so a future daily_positions.py field
+        # addition needs no change here.
+        for field in daily_positions.DETAIL_FIELDS:
+            if field in p:
+                entry[field] = p[field]
         found_code, found_info = match_machine_to_station(stabled_at, stations_geo)
         if found_info:
             entry['station'] = found_code
