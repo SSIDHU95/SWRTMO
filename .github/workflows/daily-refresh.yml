@@ -1,4 +1,4 @@
-name: SAMARTH daily data refresh
+name: SAMARTH daily data refresh old
 
 # Runs the live Supabase-backed aggregation pipeline (pipeline/aggregate.py)
 # and pushes its output to the `dashboard_payload` table the SAMARTH
