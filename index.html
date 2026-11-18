@@ -3091,7 +3091,11 @@ function openMachineDetailDrawer(machineName){
     (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} shortfall log).</div>` : '')
   );
 
-  openDrawer(m.machine, `${esc(m.type)} &bull; ${esc(m.tamping)}`, html);
+  // Added 18-Nov-2026 per Shruti: "when we go to any machine chart, you
+  // can write the full form of the machine at the top" -- m.typeFullName
+  // comes straight off aggregate.py's ph.MTYPE_FULL_NAME table.
+  const typeLabel = m.typeFullName ? `${esc(m.type)} &mdash; ${esc(m.typeFullName)}` : esc(m.type);
+  openDrawer(m.machine, `${typeLabel} &bull; ${esc(m.tamping)}`, html);
   const monthTargets = months.map(()=> m.targetMonth||0);
   safe('mdMonthChart', ()=> svgTargetProgress(document.getElementById('mdMonthChart'), {
     labels: monthLbls, targets: monthTargets, actuals: monthVals, unitSuffix: m.unit||''
@@ -4626,7 +4630,13 @@ function openMachineTypeMonthlyDrawer(type){
   // line in "for free", consistent with every other machine list on the
   // dashboard (Fleet Size, Machines Working, etc).
   html += dcard('Machines', 'click a machine for its individual record', rows.map(machineRowHtml).join(''));
-  openDrawer(`${type} — Progress vs Target`, `${rows.length} machines &bull; ${esc((rows[0]&&rows[0].tamping)||'')}`, html);
+  // Added 18-Nov-2026 per Shruti: "for the group of machines, you also
+  // give the proper full form of the machine at the top" -- rollupRow
+  // (mtypeRollup) now carries fullName from aggregate.py's
+  // ph.MTYPE_FULL_NAME, with DATA.progress.typeFullNames as a fallback.
+  const typeFullName = (rollupRow && rollupRow.fullName) || (DATA.progress.typeFullNames||{})[type];
+  const typeHeading = typeFullName ? `${type} — ${typeFullName}` : type;
+  openDrawer(`${typeHeading} — Progress vs Target`, `${rows.length} machines &bull; ${esc((rows[0]&&rows[0].tamping)||'')}`, html);
   const monthTargets = months.map(()=> rows.reduce((s,m)=>s+(m.targetMonth||0),0));
   const monthActuals = months.map(k=> rows.reduce((s,m)=> s+(typeof m[k]==='number'?m[k]:0), 0));
   safe('mtMonthChart', ()=> svgTargetProgress(document.getElementById('mtMonthChart'), {

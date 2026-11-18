@@ -3526,9 +3526,14 @@ def run(base, outdir):
     p['meta']['iohPohStaleCount'] = len(iohpoh_stale)
 
     # ---- v3: age enrichment + catMachine/catDivMachine drilldowns + merged mtypeRollup ----
-    age_by_machine = {norm_machine(a['Machine']): a for a in age_profile}
+    # Fixed 18-Nov-2026 per Shruti: machine_key_aliased() instead of plain
+    # norm_machine(), so a BRM/PBR or SBCM/FRM naming mismatch between the
+    # Age Profile sheet and Cumulative Progress no longer drops the age/
+    # commissioning-date attachment for that machine (same fix as the
+    # Supabase-backed pipeline's aggregate.py).
+    age_by_machine = {machine_key_aliased(norm_machine(a['Machine'])): a for a in age_profile}
     for m in p['progress']['machines']:
-        a = age_by_machine.get(norm_machine(m['machine']))
+        a = age_by_machine.get(machine_key_aliased(norm_machine(m['machine'])))
         if a:
             m['age'] = a['AgeYears']
             m['ageBucket'] = ('0-10 yrs' if (a['AgeYears'] or 0) <= 10 else
@@ -3739,7 +3744,13 @@ def run(base, outdir):
                 m['iohPohDaysElapsed'] = (datetime.datetime.combine(as_of, datetime.time()) - dt).days
                 exp = parse_ddmmyyyy(m.get('iohPohExpected'))
                 if exp:
-                    m['iohPohTotalSpan'] = (exp - dt).days
+                    # Fixed 18-Nov-2026 per Shruti: "if the number of days
+                    # designated is 105, you are showing it as 104" --
+                    # (exp - dt).days is an EXCLUSIVE day count; TMM/IRTMM's
+                    # "days designated" counts both the start day and the
+                    # end day as whole days under IOH/POH (inclusive of
+                    # both endpoints), one more than the plain subtraction.
+                    m['iohPohTotalSpan'] = (exp - dt).days + 1
                     m['iohPohDays'] = m['iohPohTotalSpan']  # designated days = target date - start date (TMM/IRTMM)
 
     # =====================================================================
