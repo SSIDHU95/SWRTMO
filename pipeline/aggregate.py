@@ -511,8 +511,25 @@ def extract_network_map():
     except Exception as e:
         log(f"WARN: daily_positions fetch failed ({e}) - 'networkMap' omitted from payload.")
         return None
+    # Added 18-Nov-2026: Sr.DEN jurisdiction, for the map's own "Jump
+    # closer by Sr.DEN jurisdiction" box (see network_map.py's
+    # build_network_map docstring entry on this date for the full
+    # story). Shares the same _PAYLOAD_CACHE entry as
+    # extract_daily_progress_srden() above (keyed by table name), so
+    # this never triggers a second network fetch regardless of call
+    # order. Degrades to None (not a pipeline-aborting failure) exactly
+    # like the two fetches above -- build_network_map()'s own
+    # srden_payload=None default already means "no Sr.DEN data this
+    # run", not a crash.
     try:
-        return network_map.build_network_map(rdps_rows, positions_payload)
+        srden_payload = _cached_payload(daily_progress_srden)
+    except Exception as e:
+        log(f"WARN: daily_progress_srden fetch failed ({e}) - networkMap's machines "
+            f"will simply have no 'srDen' field this run (its own jump box degrades "
+            f"to \"No Sr.DEN jurisdiction data\", same as it always has until now).")
+        srden_payload = None
+    try:
+        return network_map.build_network_map(rdps_rows, positions_payload, srden_payload)
     except Exception as e:
         log(f"WARN: network_map.build_network_map() failed ({e}) - 'networkMap' omitted from payload.")
         return None
