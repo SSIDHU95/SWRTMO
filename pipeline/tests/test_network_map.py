@@ -40,13 +40,20 @@ def synthetic_rdps_rows():
     grouping has something to group), one repeated stationCode (to
     exercise the dedup-first-occurrence rule)."""
     return [
-        # UBL, route A, 3 points in descending km order (tests sorting)
+        # UBL, route A, 3 points in descending km order (tests sorting).
+        # Kept close together (~150m apart) -- not realistic chainage
+        # spacing (real survey points are ~10-100m apart; see
+        # GAP_THRESHOLD_KM's comment in network_map.py), but the point
+        # here is just to stay well UNDER that 10km gap-split threshold
+        # so this fixture exercises sorting, not splitting. AAA's
+        # lat/lon must stay exactly 15.10/75.10 -- TestStationBuilding's
+        # test_first_occurrence_wins_on_a_repeated_code asserts it.
         dict(division='UBL', route='UBL-MRJ DN', km=10, distance_m=0,
              lat=15.10, lon=75.10, station_code='AAA', station_name='Alpha', review_notes=None),
         dict(division='UBL', route='UBL-MRJ DN', km=0, distance_m=0,
-             lat=15.00, lon=75.00, station_code='BBB', station_name='Beta', review_notes=None),
+             lat=15.099, lon=75.099, station_code='BBB', station_name='Beta', review_notes=None),
         dict(division='UBL', route='UBL-MRJ DN', km=20, distance_m=0,
-             lat=15.20, lon=75.20, station_code=None, station_name=None, review_notes=None),
+             lat=15.101, lon=75.101, station_code=None, station_name=None, review_notes=None),
         # UBL, route B
         dict(division='UBL', route='UBL-LWR', km=5, distance_m=0,
              lat=15.50, lon=75.50, station_code='CCC', station_name='Gamma', review_notes=None),
@@ -75,6 +82,19 @@ def synthetic_positions_payload():
         dict(machine='MPT 003', div='MYS', stabledAt='DDD'),            # exact match, different division
         dict(machine='UTV 004', div='SBC', stabledAt='ZZZ-UNKNOWN'),    # no station anywhere -> unmatched
         dict(machine='RMV 005', div='SBC', stabledAt=None),             # no code at all -> unmatched, reason no_code
+    ])
+
+
+def synthetic_srden_payload():
+    """As daily_progress_srden.fetch_payload()'s payload element (the
+    dict BEFORE extract_srden() reshapes it) -- see that module's own
+    docstring for the exact shape. Covers BCM 001 and MPT 003 (both
+    placed machines in synthetic_positions_payload above) and
+    deliberately leaves DUO 002 out, to exercise the lookup-miss path
+    (no fabricated 'srDen')."""
+    return dict(asOfDate='13.11.2026', machines=[
+        dict(machine='BCM 001', division='UBL', srDen='OL Sr.DEN.W.'),
+        dict(machine='MPT 003', division='MYS', srDen='OL Sr.DEN.N.'),
     ])
 
 
@@ -125,7 +145,7 @@ class TestTrackBuilding(unittest.TestCase):
         tracks = network_map.build_tracks_from_rdps(self.rdps_by_div)
         dn_sheet = next(s for s in tracks['UBL'] if s['sheet'] == 'UBL-MRJ DN')
         # source rows were km 10, 0, 20 in that order -- must come out 0,10,20
-        self.assertEqual(dn_sheet['pts'], [[15.00, 75.00], [15.10, 75.10], [15.20, 75.20]])
+        self.assertEqual(dn_sheet['pts'], [[15.099, 75.099], [15.10, 75.10], [15.101, 75.101]])
 
     def test_rows_missing_lat_lon_are_excluded_from_tracks(self):
         rdps_by_div = {'UBL': [dict(route='R1', km=1, distanceM=0, lat=None, lon=None,
@@ -144,7 +164,12 @@ class TestTrackDecimation(unittest.TestCase):
     survey set instead of a silently-truncated 1000)."""
 
     def _route_with_n_points(self, n):
-        return {'UBL': [dict(route='R1', km=i, distanceM=0, lat=float(i), lon=float(i) * 2,
+        # Tight, realistic spacing (~11m lat-step) so this fixture tests
+        # decimation alone, with no gap large enough to trigger the
+        # 18-Nov-2026 gap-splitting fix (GAP_THRESHOLD_KM=10) -- that
+        # behavior has its own TestTrackGapSplitting below.
+        return {'UBL': [dict(route='R1', km=i, distanceM=0,
+                              lat=15.0 + i * 0.0001, lon=75.0 + i * 0.0002,
                               stationCode=None, stationName=None, reviewNotes=None)
                          for i in range(n)]}
 
@@ -163,8 +188,9 @@ class TestTrackDecimation(unittest.TestCase):
         rdps_by_div = self._route_with_n_points(50000)
         tracks = network_map.build_tracks_from_rdps(rdps_by_div)
         pts = tracks['UBL'][0]['pts']
-        self.assertEqual(pts[0], [0.0, 0.0])
-        self.assertEqual(pts[-1], [49999.0, 99998.0])
+        self.assertEqual(pts[0], [15.0, 75.0])
+        self.assertAlmostEqual(pts[-1][0], 15.0 + 49999 * 0.0001)
+        self.assertAlmostEqual(pts[-1][1], 75.0 + 49999 * 0.0002)
 
     def test_decimate_helper_never_exceeds_max_points(self):
         rows = [{'v': i} for i in range(12345)]
@@ -177,6 +203,99 @@ class TestTrackDecimation(unittest.TestCase):
         rows = [{'v': i} for i in range(5)]
         thinned = network_map._decimate(rows, max_points=400)
         self.assertEqual(thinned, rows)
+
+
+class TestTrackGapSplitting(unittest.TestCase):
+    """Fixed 18-Nov-2026, reported directly by Shruti off the live map:
+    a genuine gap in a route's surveyed chainage (a stretch that was
+    simply never surveyed/synced between two km values that ARE
+    recorded) used to be drawn as one long, dead-straight line jumping
+    clear across unrelated geography -- e.g. her screenshots of a line
+    from the Chikjajur/Davangere area all the way to Chikmagalur/
+    Tumakuru (MYS "DRU-CMGR"), and another near Jolarpet/Malur (SBC
+    "SBC-JTJ DN"). Confirmed directly against the live rdps_points
+    table: normal point-to-point spacing is a few metres (median
+    ~10m), with a long tail of legitimate sparse-but-real stretches
+    climbing gradually up to 16.4km -- then a dead zone with NOT ONE
+    gap anywhere between 16.4km and 51.2km, then exactly 3 genuine
+    breaks far past it (51.2km, 91.8km, 152.2km). GAP_THRESHOLD_KM=20
+    sits in the middle of that dead zone. See network_map.py's
+    GAP_THRESHOLD_KM comment for the full writeup."""
+
+    def _pt(self, route, km, lat, lon):
+        return dict(route=route, km=km, distanceM=0, lat=lat, lon=lon,
+                     stationCode=None, stationName=None, reviewNotes=None)
+
+    def test_haversine_matches_known_one_degree_latitude_distance(self):
+        # 1 degree of latitude is ~111.2km anywhere on Earth.
+        d = network_map._haversine_km(0.0, 0.0, 1.0, 0.0)
+        self.assertAlmostEqual(d, 111.2, delta=0.5)
+
+    def test_route_with_no_large_gap_stays_a_single_segment(self):
+        # Every consecutive pair here is ~110m apart -- well under the
+        # 20km threshold.
+        rdps_by_div = {'UBL': [self._pt('R1', i, 15.0 + i * 0.001, 75.0) for i in range(5)]}
+        tracks = network_map.build_tracks_from_rdps(rdps_by_div)
+        self.assertEqual(len(tracks['UBL']), 1)
+        self.assertEqual(len(tracks['UBL'][0]['pts']), 5)
+
+    def test_gap_just_under_threshold_is_not_split(self):
+        # ~16.4km gap -- right at the top of the legitimate sparse-tail
+        # the live data showed (UBL "GDG-HG UP" and others have real,
+        # honest gaps this big), which this fix must leave alone. Must
+        # NOT split.
+        rdps_by_div = {'UBL': [
+            self._pt('R1', 0, 15.00, 75.0),
+            self._pt('R1', 1, 15.147, 75.0),   # ~16.3km from the point above
+        ]}
+        tracks = network_map.build_tracks_from_rdps(rdps_by_div)
+        self.assertEqual(len(tracks['UBL']), 1)
+        self.assertEqual(len(tracks['UBL'][0]['pts']), 2)
+
+    def test_one_large_gap_splits_route_into_two_segments(self):
+        # Two tight 2-point clusters ~55km apart (mirrors the real
+        # DRU-CMGR/SBC-JTJ DN breaks, just a smaller gap for a fast
+        # test) -- must come back as 2 separate {"sheet": "R1", ...}
+        # entries, never one line connecting across the 55km jump.
+        rdps_by_div = {'MYS': [
+            self._pt('R1', 0, 15.000, 75.0),
+            self._pt('R1', 1, 15.001, 75.0),   # ~110m from the point above
+            self._pt('R1', 2, 15.500, 75.0),   # ~55.5km from the point above -- THE gap
+            self._pt('R1', 3, 15.501, 75.0),   # ~110m from the point above
+        ]}
+        tracks = network_map.build_tracks_from_rdps(rdps_by_div)
+        segments = tracks['MYS']
+        self.assertEqual(len(segments), 2)
+        self.assertTrue(all(s['sheet'] == 'R1' for s in segments))
+        self.assertEqual(segments[0]['pts'], [[15.000, 75.0], [15.001, 75.0]])
+        self.assertEqual(segments[1]['pts'], [[15.500, 75.0], [15.501, 75.0]])
+
+    def test_two_large_gaps_split_route_into_three_segments(self):
+        rdps_by_div = {'MYS': [
+            self._pt('R1', 0, 15.0, 75.0),
+            self._pt('R1', 1, 15.5, 75.0),   # gap 1 (~55.5km)
+            self._pt('R1', 2, 16.0, 75.0),   # gap 2 (~55.5km)
+        ]}
+        tracks = network_map.build_tracks_from_rdps(rdps_by_div)
+        self.assertEqual(len(tracks['MYS']), 3)
+        self.assertEqual([s['pts'] for s in tracks['MYS']],
+                          [[[15.0, 75.0]], [[15.5, 75.0]], [[16.0, 75.0]]])
+
+    def test_each_segment_is_decimated_independently(self):
+        # A small segment (5 points) and a huge one (50000 points),
+        # separated by one big gap -- the small segment must come back
+        # untouched while only the huge one gets capped, proving
+        # decimation runs AFTER splitting, per segment, not on the
+        # whole unsplit route (which would have let the huge segment's
+        # own decimate() stride pick an anchor point from the small
+        # segment across the gap).
+        small = [self._pt('R1', i, 15.0 + i * 0.0001, 75.0) for i in range(5)]
+        huge = [self._pt('R1', 100 + i, 20.0 + i * 0.0001, 80.0) for i in range(50000)]
+        rdps_by_div = {'UBL': small + huge}
+        tracks = network_map.build_tracks_from_rdps(rdps_by_div)
+        self.assertEqual(len(tracks['UBL']), 2)
+        self.assertEqual(len(tracks['UBL'][0]['pts']), 5)
+        self.assertEqual(len(tracks['UBL'][1]['pts']), network_map.MAX_POINTS_PER_ROUTE)
 
 
 class TestSupplementMerge(unittest.TestCase):
@@ -345,6 +464,50 @@ class TestBuildNetworkMapEndToEnd(unittest.TestCase):
                 self.assertIn('pts', sheet)
                 for pt in sheet['pts']:
                     self.assertEqual(len(pt), 2)
+
+
+class TestSrDenJoin(unittest.TestCase):
+    """Fixed 18-Nov-2026: see build_network_map's docstring entry on
+    this date -- this join is what feeds index.html's SRDEN_CODES check
+    and its "Jump closer by Sr.DEN jurisdiction" box, which used to
+    always read empty because this function never looked at the
+    daily_progress_srden table at all."""
+
+    def setUp(self):
+        self.result = network_map.build_network_map(
+            synthetic_rdps_rows(), synthetic_positions_payload(), synthetic_srden_payload())
+
+    def test_matched_machine_gets_the_bare_jurisdiction_letter(self):
+        # BCM 001 -> UBL, canon_srden gives "UBL Sr.DEN/W" -- only the
+        # trailing "W" is what SRDEN_CODES (on the JS side) checks for.
+        m = self.result['stations']['AAA']['machines'][0]
+        self.assertEqual(m['machine'], 'BCM 001')
+        self.assertEqual(m['srDen'], 'W')
+
+    def test_a_different_machine_and_division_gets_its_own_code(self):
+        m = self.result['stations']['DDD']['machines'][0]
+        self.assertEqual(m['machine'], 'MPT 003')
+        self.assertEqual(m['srDen'], 'N')
+
+    def test_lookup_miss_leaves_srden_off_rather_than_fabricating_it(self):
+        # DUO 002 is deliberately absent from synthetic_srden_payload().
+        m = self.result['stations']['BBB']['machines'][0]
+        self.assertEqual(m['machine'], 'DUO 002')
+        self.assertNotIn('srDen', m)
+
+    def test_no_srden_payload_at_all_leaves_every_machine_without_it(self):
+        # The default (no 3rd argument) must behave exactly as it did
+        # before this fix -- confirmed separately by
+        # TestBuildNetworkMapEndToEnd's own
+        # test_placed_machine_entries_carry_only_the_honest_live_fields,
+        # which asserts 'srDen' is absent; this test instead checks the
+        # explicit srden_payload=None case gives the identical result.
+        result_default = network_map.build_network_map(synthetic_rdps_rows(), synthetic_positions_payload())
+        result_explicit_none = network_map.build_network_map(
+            synthetic_rdps_rows(), synthetic_positions_payload(), None)
+        for res in (result_default, result_explicit_none):
+            m = res['stations']['AAA']['machines'][0]
+            self.assertNotIn('srDen', m)
 
 
 if __name__ == '__main__':
