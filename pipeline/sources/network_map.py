@@ -238,23 +238,39 @@ def _machine_type(machine):
     rollups) already uses to classify a machine, rather than
     reimplementing the old rebuild_data.py's own narrower
     `re.match(r'[A-Z]+', ...)`. Keeps this map's type classification
-    identical to every other tab's."""
+    identical to every other tab's.
+
+    Fixed 18-Nov-2026 per Shruti's corrected SWR_Machine_Details_1.xlsx:
+    this is the RAW prefix (e.g. 'PBR', 'FRM', 'SQRS', 'T', 'WST') --
+    build_network_map() below now runs it through ph.disp_type() before
+    storing it on a machine entry, same as every other tab's `type`
+    field, so the raw value itself is unchanged here (still useful as an
+    intermediate step) but is never the one that reaches the payload."""
     return ph.mtype_of(machine)
 
 
 def _type_name(typecode):
-    """Short display name for a type code -- identical to every type
-    code except 'T', which the source sheet and the rest of this
-    dashboard display as 'T-28' (the 19-Oct-2026 short-form-names
-    round's one deliberate exception, preserved here)."""
-    return 'T-28' if typecode == 'T' else typecode
+    """Short display name for an already-canonicalised (disp_type()'d)
+    type code. Used to special-case 'T' -> 'T-28' before the 18-Nov-2026
+    fix below folded 'T' into 'PCCM' at the source -- that raw code never
+    reaches here any more (build_network_map() disp_type()'s it first),
+    so this is now a plain identity passthrough, kept as its own
+    function in case a future short-form override is ever needed again."""
+    return typecode
 
 
 def _cat_of(typecode):
     """-> 'tamping' or 'nontamping', via pipeline_helpers.TAMPING_INFO --
     the dashboard's own definitive Tamping/Non-Tamping classification
     (user-confirmed 28-Sep-2026), same fallback ('Non-Tamping') aggregate.py
-    itself uses for a type code not in that table."""
+    itself uses for a type code not in that table.
+
+    Fixed 18-Nov-2026: TAMPING_INFO is keyed by canonical/display type
+    code only now (BRM/SBCM/TLE/PCCM/DUO, not PBR/FRM/SQRS/T/WST) -- the
+    `typecode` this receives is already disp_type()'d by the caller
+    (build_network_map()), so no extra wrap is needed here, unlike the
+    other TAMPING_INFO.get() call sites that still pass a raw regex
+    prefix straight through."""
     label = ph.TAMPING_INFO.get(typecode, ('Non-Tamping', 'Unclassified'))[0]
     return 'tamping' if label == 'Tamping' else 'nontamping'
 
@@ -619,7 +635,13 @@ def build_network_map(rdps_rows, positions_payload, srden_payload=None):
         div = p.get('div')
         if not machine or _is_header_leakage(machine, stabled_at):
             continue
-        mtype = _machine_type(machine)
+        # Fixed 18-Nov-2026 per Shruti's corrected SWR_Machine_Details_1.xlsx:
+        # disp_type() the raw prefix (PBR->BRM, FRM->SBCM, SQRS->TLE,
+        # T->PCCM, WST->DUO, plus the pre-existing PCTM/PCT->UNI) before it
+        # ever reaches this entry, so the Network Map tab's own type
+        # filter/legend is consistent with the rest of the dashboard
+        # instead of showing these as six phantom extra "types".
+        mtype = ph.disp_type(_machine_type(machine))
         entry = dict(machine=machine, type=mtype, typeName=_type_name(mtype), cat=_cat_of(mtype),
                      div=div, stabledAt=stabled_at)
         # Added 14-Nov-2026: the day's real working-detail fields, when

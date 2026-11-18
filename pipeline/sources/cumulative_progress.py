@@ -126,7 +126,15 @@ def extract_cum_progress(payload, home_div, bare_type_div, norm):
         fields = _row_fields(r)
         mtype_match = re.match(r'^([A-Za-z]+)', machine)
         mtype = mtype_match.group(1).upper() if mtype_match else 'UNKNOWN'
-        hd = home_div.get(norm(machine)) or bare_type_div.get(mtype)
+        # Fixed 18-Nov-2026: `norm` is now swr_machine_details.py's
+        # alias-aware _home_div_key (see its own comment), so
+        # home_div.get(norm(machine)) already resolves "PBR 04" against
+        # an Original-Allocation-side "BRM-04" entry. The bare_type_div
+        # fallback (used when a machine's own name isn't individually
+        # listed in Original Allocation - just its type) needs the same
+        # canonicalisation applied to `mtype` itself, via disp_type(),
+        # since bare_type_div's own keys are now disp_type()'d too.
+        hd = home_div.get(norm(machine)) or bare_type_div.get(ph.disp_type(mtype))
         if div_cur in ('MYS', 'SBC', 'UBL'):
             status = 'Active'
         elif div_cur in ('IOH', 'POH'):
