@@ -3010,6 +3010,77 @@ function fyMonthsPresent(rows){
 }
 function fyMonthLabelsFor(keys){ return keys.map(k => FY_MONTH_LABELS[k]); }
 
+// Shared day-formatter for the Monthly Machine sheet's ISO "YYYY-MM-DD"
+// dates (added 18-Nov-2026, used by both the Network Map popup's "last
+// team's progress" and the machine detail drawer's "last 15 days").
+// Fixed 18-Nov-2026: this (and the two functions below) originally lived
+// inside the Network Map's own private `(function(){...})()` IIFE further
+// down the page -- harmless for the Network Map popup itself (which calls
+// lastTeamProgressHtml from inside that same IIFE), but openMachineDetailDrawer
+// below is in THIS global script, outside that IIFE, so its call to
+// last15DaysHtml(m) threw "last15DaysHtml is not defined" for every
+// machine, silently aborting the whole drawer before openDrawer() ever
+// ran -- exactly what Shruti saw ("Details are not opening for particular
+// machines"). Moved here so the global script can see them directly; the
+// IIFE's own openMachineDrawer() still finds them fine via the normal
+// outer-scope lookup.
+function fmtIsoDateShort(iso){
+  if (!iso) return '';
+  const parts = String(iso).split('-');
+  if (parts.length!==3) return esc(iso);
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mi = parseInt(parts[1],10)-1;
+  return `${parseInt(parts[2],10)} ${MON[mi]||parts[1]}`;
+}
+// "Last team's progress" (added 18-Nov-2026 per Shruti: "whenever I click
+// on a machine on the maps... below it, I want the last team's progress
+// as shown in the monthly progress sheet. Only progress is shown here.")
+// -- progressMachine.dailyLog comes from aggregate.py's
+// monthly_machine.extract_monthly_machine_by_machine(), already sorted
+// oldest-first, so the LAST entry is simply the most recent day this
+// sheet has a value for that machine (which may be a numeric km/unit
+// figure, or a short remark like "Depot work" on a day with no numeric
+// progress -- shown as-is either way, since that genuinely IS "the last
+// team's progress" for that day). Not every machine has a log (MDU/
+// RBMV/UNI/RMV aren't tracked in this sheet at all) -- renders nothing
+// rather than a confusing "no data" block for those, matching this
+// drawer's existing pattern of simply omitting a stat it doesn't have
+// (see statusStatRow above).
+function lastTeamProgressHtml(progressMachine){
+  if (!progressMachine || !Array.isArray(progressMachine.dailyLog) || !progressMachine.dailyLog.length) return '';
+  const last = progressMachine.dailyLog[progressMachine.dailyLog.length-1];
+  const isNum = typeof last.value === 'number';
+  const valueHtml = isNum
+    ? `${last.value.toLocaleString()} ${esc(progressMachine.unit||'')}`
+    : `<span style="font-size:12.5px;">${esc(String(last.value))}</span>`;
+  return `<div class="nm-dstat-row" style="margin-top:10px;">
+    <div class="nm-dstat" style="flex:1;">
+      <div class="l">Last team's progress &bull; Monthly Progress sheet</div>
+      <div class="v" style="font-size:13px;">${valueHtml} <span style="opacity:.65;font-size:11.5px;">(${esc(fmtIsoDateShort(last.date))})</span></div>
+    </div>
+  </div>`;
+}
+// "Last 15 days, day by day" (added 18-Nov-2026 per Shruti, for the
+// machine detail drawer -- see openMachineDetailDrawer). m.dailyLog is
+// the same per-machine log lastTeamProgressHtml() above reads, already
+// sorted oldest-first; slice(-15) is simply the most recent 15 days this
+// sheet has a value for.
+function last15DaysHtml(m){
+  if (!m || !Array.isArray(m.dailyLog) || !m.dailyLog.length) return '';
+  const entries = m.dailyLog.slice(-15);
+  const rows = entries.map(e=>{
+    const isNum = typeof e.value === 'number';
+    const valHtml = isNum
+      ? `${e.value.toLocaleString()} ${esc(m.unit||'')}`
+      : `<span style="opacity:.75;">${esc(String(e.value))}</span>`;
+    return `<div class="dmachine-card" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span class="dmname" style="font-size:12.5px;">${esc(fmtIsoDateShort(e.date))}</span>
+      <span style="font-size:12.5px;text-align:right;">${valHtml}</span>
+    </div>`;
+  }).join('');
+  return dcard('Last 15 days — day by day', `From the Monthly Progress sheet &bull; most recent ${entries.length} day(s) with an entry`, rows);
+}
+
 // ---------------------------------------------------------------------
 // Machine-level exhaustive drill: monthly performance, exceptions,
 // shortfall history, IOH/POH / deputation detail — "never need to go
@@ -8871,65 +8942,12 @@ function machineKeyAliasedJS(s){
   if (m) return (PREFIX_ALIASES[m[1]]||m[1]) + m[2];
   return k;
 }
-// Shared day-formatter for the Monthly Machine sheet's ISO "YYYY-MM-DD"
-// dates (added 18-Nov-2026, used by both the Network Map popup's "last
-// team's progress" and the machine detail drawer's "last 15 days").
-function fmtIsoDateShort(iso){
-  if (!iso) return '';
-  const parts = String(iso).split('-');
-  if (parts.length!==3) return esc(iso);
-  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const mi = parseInt(parts[1],10)-1;
-  return `${parseInt(parts[2],10)} ${MON[mi]||parts[1]}`;
-}
-// "Last team's progress" (added 18-Nov-2026 per Shruti: "whenever I click
-// on a machine on the maps... below it, I want the last team's progress
-// as shown in the monthly progress sheet. Only progress is shown here.")
-// -- progressMachine.dailyLog comes from aggregate.py's
-// monthly_machine.extract_monthly_machine_by_machine(), already sorted
-// oldest-first, so the LAST entry is simply the most recent day this
-// sheet has a value for that machine (which may be a numeric km/unit
-// figure, or a short remark like "Depot work" on a day with no numeric
-// progress -- shown as-is either way, since that genuinely IS "the last
-// team's progress" for that day). Not every machine has a log (MDU/
-// RBMV/UNI/RMV aren't tracked in this sheet at all) -- renders nothing
-// rather than a confusing "no data" block for those, matching this
-// drawer's existing pattern of simply omitting a stat it doesn't have
-// (see statusStatRow above).
-function lastTeamProgressHtml(progressMachine){
-  if (!progressMachine || !Array.isArray(progressMachine.dailyLog) || !progressMachine.dailyLog.length) return '';
-  const last = progressMachine.dailyLog[progressMachine.dailyLog.length-1];
-  const isNum = typeof last.value === 'number';
-  const valueHtml = isNum
-    ? `${last.value.toLocaleString()} ${esc(progressMachine.unit||'')}`
-    : `<span style="font-size:12.5px;">${esc(String(last.value))}</span>`;
-  return `<div class="nm-dstat-row" style="margin-top:10px;">
-    <div class="nm-dstat" style="flex:1;">
-      <div class="l">Last team's progress &bull; Monthly Progress sheet</div>
-      <div class="v" style="font-size:13px;">${valueHtml} <span style="opacity:.65;font-size:11.5px;">(${esc(fmtIsoDateShort(last.date))})</span></div>
-    </div>
-  </div>`;
-}
-// "Last 15 days, day by day" (added 18-Nov-2026 per Shruti, for the
-// machine detail drawer -- see openMachineDetailDrawer). m.dailyLog is
-// the same per-machine log lastTeamProgressHtml() above reads, already
-// sorted oldest-first; slice(-15) is simply the most recent 15 days this
-// sheet has a value for.
-function last15DaysHtml(m){
-  if (!m || !Array.isArray(m.dailyLog) || !m.dailyLog.length) return '';
-  const entries = m.dailyLog.slice(-15);
-  const rows = entries.map(e=>{
-    const isNum = typeof e.value === 'number';
-    const valHtml = isNum
-      ? `${e.value.toLocaleString()} ${esc(m.unit||'')}`
-      : `<span style="opacity:.75;">${esc(String(e.value))}</span>`;
-    return `<div class="dmachine-card" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px;">
-      <span class="dmname" style="font-size:12.5px;">${esc(fmtIsoDateShort(e.date))}</span>
-      <span style="font-size:12.5px;text-align:right;">${valHtml}</span>
-    </div>`;
-  }).join('');
-  return dcard('Last 15 days — day by day', `From the Monthly Progress sheet &bull; most recent ${entries.length} day(s) with an entry`, rows);
-}
+// fmtIsoDateShort/lastTeamProgressHtml/last15DaysHtml moved out to the
+// global dashboard script (near openMachineDetailDrawer) on 18-Nov-2026 --
+// see that script's own comment for why (this IIFE is a private scope the
+// global script can't reach, and openMachineDetailDrawer needs
+// last15DaysHtml directly). findProgressMachine stays here since it's
+// only ever called from this module's own openMachineDrawer() below.
 function findProgressMachine(name){
   // NOTE: a top-level `const DATA = ...;` in another <script> tag never
   // becomes a `window.DATA` property (only `var`/function declarations do)
