@@ -1706,7 +1706,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
     <div class="card">
       <div class="cardhead">
-        <div><h3>Year-on-Year &mdash; Apr&ndash;Sep 2025 vs Apr&ndash;Sep 2026</h3><div class="cap">Same six-month window, cumulative progress &bull; click a bar for that type's year-on-year detail &bull; figures shown per unit of measure (Km/R-S/T-O/Unit) &mdash; fleet-wide totals are a breakdown since types mix units</div></div>
+        <div><h3 id="yoyHeading">Year-on-Year</h3><div class="cap" id="yoyCap">Cumulative progress, same period &bull; click a bar for that type's year-on-year detail &bull; figures shown per unit of measure (Km/R-S/T-O/Unit) &mdash; fleet-wide totals are a breakdown since types mix units</div></div>
       </div>
       <div id="yoyBox"></div>
       <div class="ctrlrow" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;">
@@ -1719,27 +1719,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="chartwrap" style="height:280px; margin-top:6px;"><div id="ovYoyChart" class="svgchart"></div></div>
     </div>
 
-    <div class="card">
-      <h3>Machine-level Detail</h3>
-      <div class="cap" id="pgTableCap">All machines &bull; cumulative progress to date vs proportionate target &bull; click a row for its month-by-month performance &bull; click a column heading to sort</div>
-      <div class="searchbar">
-        <input type="text" id="pgSearch" placeholder="Search machine...">
-        <select id="pgDivFilter"><option value="">All divisions</option><option>MYS</option><option>SBC</option><option>UBL</option></select>
-        <select id="pgTypeFilter"><option value="">All types</option></select>
-        <select id="pgStatusFilter"><option value="">All status</option></select>
-        <select id="pgTampingFilter"><option value="">Tamping + Non-Tamping</option><option>Tamping</option><option>Non-Tamping</option></select>
-      </div>
-      <div class="tblwrap" style="max-height:520px; overflow-y:auto;">
-        <table id="pgTable">
-          <thead><tr>
-            <th data-sort="type">Type</th><th data-sort="tamping">Category</th><th data-sort="machine">Machine</th><th data-sort="div">Div</th><th data-sort="status">Status</th><th data-sort="unit">Unit</th>
-            <th class="num" data-sort="annualTarget">Annual Tgt</th><th class="num" data-sort="targetToDate">Tgt to date</th><th class="num" data-sort="actualToDate">Actual to date</th><th class="num" data-sort="pct">% Prog</th>
-            <th data-sort="iohPohStart">IOH/POH Start</th><th data-sort="iohPohExpected">IOH/POH Expected</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
   </section>
 
   <!-- ============ SHORTFALL ============ -->
@@ -2505,8 +2484,8 @@ function fmtNum(v){
 // Units of measure (added 08-Oct-2026 per the user: "In all the sheets
 // wherever you report progress, start giving units also. It is there in
 // cumulative progress sheet") -- the Cumulative Progress sheet carries a
-// per-machine Unit column (Km / R-S / T-O / Unit) that the main #pgTable
-// already showed, but most other progress figures across the dashboard
+// per-machine Unit column (Km / R-S / T-O / Unit), but most other progress
+// figures across the dashboard
 // (Sr.DEN banners, drawers, Year-on-Year, By-Machine-Type boxes) printed
 // bare numbers with no unit at all. Every machine of a given TYPE shares
 // exactly one unit (confirmed against the real data), so a single-type
@@ -3091,6 +3070,18 @@ function openMachineDetailDrawer(machineName){
     (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} shortfall log).</div>` : '')
   );
 
+  // Added 18-Nov-2026 per Shruti: "below the issue history, there should
+  // be the last 15 days' progress, day by day, as it has happened,
+  // connected with the monthly progress sheet." m.dailyLog comes from
+  // aggregate.py's monthly_machine.extract_monthly_machine_by_machine(),
+  // oldest-first, so the last 15 entries are the most recent 15 days
+  // this sheet has a value for (a number, or a short remark on a day
+  // with no numeric progress -- shown either way, same convention as
+  // the Network Map popup's "last team's progress"). Not every machine
+  // has a log (MDU/RBMV/UNI/RMV aren't tracked in this sheet at all) --
+  // the card is simply omitted for those.
+  html += last15DaysHtml(m);
+
   // Added 18-Nov-2026 per Shruti: "when we go to any machine chart, you
   // can write the full form of the machine at the top" -- m.typeFullName
   // comes straight off aggregate.py's ph.MTYPE_FULL_NAME table.
@@ -3568,7 +3559,7 @@ function renderKpis(){
 
 // ---------------------------------------------------------------------
 // Generic single-click ascending/descending column sort (added 28-Sep-2026,
-// wired into #pgTable and #dsLogTable per the user's request).
+// wired into #dsLogTable and others per the user's request).
 // ---------------------------------------------------------------------
 function wireSortableHeaders(theadRowSelector, state, onChange){
   const ths = Array.from(document.querySelectorAll(theadRowSelector+' th[data-sort]'));
@@ -3595,69 +3586,15 @@ function sortRows(rows, state){
   });
 }
 
-function setupProgressTable(){
-  const tbody = document.querySelector('#pgTable tbody');
-  const pgSortState = {key:null, dir:1};
-  const typeFilter = document.getElementById('pgTypeFilter');
-  const statusFilter = document.getElementById('pgStatusFilter');
-  const tampingFilter = document.getElementById('pgTampingFilter');
-  const types = [...new Set(DATA.progress.machines.map(m=>m.type))].sort();
-  typeFilter.innerHTML += types.map(t=>`<option>${t}</option>`).join('');
-  const statuses = [...new Set(DATA.progress.machines.map(m=>m.status))].sort();
-  statusFilter.innerHTML += statuses.map(s=>`<option>${s}</option>`).join('');
-
-  function drawTable(){
-    const q = document.getElementById('pgSearch').value.toLowerCase();
-    const dv = document.getElementById('pgDivFilter').value;
-    const tp = typeFilter.value;
-    const st = statusFilter.value;
-    const tm = tampingFilter.value;
-    let rows = DATA.progress.machines.filter(m=>
-      (!q || m.machine.toLowerCase().includes(q)) &&
-      (!dv || m.div===dv) && (!tp || m.type===tp) && (!st || m.status===st) && (!tm || m.tamping===tm)
-    );
-    rows = sortRows(rows, pgSortState);
-    tbody.innerHTML = rows.map(m=>{
-      let rowHtml = `<tr style="cursor:pointer" data-m="${esc(m.machine)}">
-      <td>${esc(m.type)}</td>
-      <td><span class="pill ${m.tamping==='Tamping'?'good':'neutral'}">${esc(m.tamping)}</span></td>
-      <td>${esc(m.machine)}</td><td>${esc(m.div)}</td>
-      <td>${esc(m.status)}${m.statusCorrected?` <span class="pill warn" title="${esc(m.statusNote||'')}">corrected</span>`:''}</td>
-      <td>${esc(m.unit)}</td>
-      <td class="num">${m.annualTarget!=null?m.annualTarget.toFixed(1):''}</td><td class="num">${m.targetToDate!=null?m.targetToDate.toFixed(1):''}</td>
-      <td class="num">${m.actualToDate!=null?m.actualToDate.toFixed(1):''}</td><td class="num">${pctPill(m.pct)}</td>
-      <td>${esc(m.iohPohStart||'')}</td><td>${esc(m.iohPohExpected||'')}</td>
-    </tr>`;
-      // BCM machines also carry a Turnout (T/O) target/progress alongside their
-      // Km figures (see m.secondary) -- show it as a linked second row rather
-      // than losing it, per the user's "show both Km and T/O" request.
-      if (m.secondary){
-        const s = m.secondary;
-        rowHtml += `<tr style="cursor:pointer" data-m="${esc(m.machine)}">
-      <td>${esc(m.type)} <span class="pill neutral" title="Turnout target/progress for this machine">T/O</span></td>
-      <td></td>
-      <td>${esc(m.machine)} (T/O)</td><td>${esc(m.div)}</td>
-      <td></td>
-      <td>${esc(s.unit)}</td>
-      <td class="num">${s.annualTarget!=null?s.annualTarget.toFixed(1):''}</td><td class="num">${s.targetToDate!=null?s.targetToDate.toFixed(1):''}</td>
-      <td class="num">${s.actualToDate!=null?s.actualToDate.toFixed(1):''}</td><td class="num">${pctPill(s.pct)}</td>
-      <td></td><td></td>
-    </tr>`;
-      }
-      return rowHtml;
-    }).join('');
-    Array.from(tbody.querySelectorAll('tr')).forEach(tr=>{
-      tr.addEventListener('click', ()=>openMachineDetailDrawer(tr.dataset.m));
-    });
-  }
-  document.getElementById('pgSearch').addEventListener('input', drawTable);
-  document.getElementById('pgDivFilter').addEventListener('change', drawTable);
-  typeFilter.addEventListener('change', drawTable);
-  statusFilter.addEventListener('change', drawTable);
-  tampingFilter.addEventListener('change', drawTable);
-  wireSortableHeaders('#pgTable thead', pgSortState, drawTable);
-  drawTable();
-}
+// setupProgressTable() (the "Machine-level Detail" table on the Progress
+// vs Target tab) removed 18-Nov-2026 per Shruti: "there is no need for all
+// this detail here... it is not required" (her 4th screenshot showed this
+// exact per-machine table). The #pgTable/#pgSearch/#pgDivFilter/
+// #pgTypeFilter/#pgStatusFilter/#pgTampingFilter markup above it was
+// removed from the Progress-vs-Target section too. Every other way to
+// drill into a single machine's detail (machineRowHtml() rows, the
+// Network Map, openMachineDetailDrawer() from the Cumulative Progress /
+// Year-on-Year charts' own bars) is untouched.
 
 // ---------------------------------------------------------------------
 // Compact Sr.DEN message banner, reusable on every tab (added 28-Sep-2026
@@ -3669,12 +3606,31 @@ function setupProgressTable(){
 // vs Target tab uses this (see below) to show a shortfall-against-target /
 // year-on-year message instead of the generic exceptions-and-attention one.
 // ---------------------------------------------------------------------
+// keysFn (added 18-Nov-2026 per Shruti: "the senior DN messages at the
+// top are not coming according to what machines they have deployed") --
+// the dropdown's key list used to ALWAYS come from DATA.shortfall.
+// srdenBundle, even for a banner whose rankFn/messageFn (progress, fleet
+// IOH/POH release) is a completely different domain with nothing to do
+// with shortfall data. Task #53's still-open gap (no live source for the
+// Daily Progress shortfall-category log) leaves that bundle genuinely
+// EMPTY right now, which was silently hiding those banners entirely
+// (host.style.display='none') even though each has real, correct,
+// live data of its own to show -- confirmed against the live payload:
+// srdenBundle has 0 keys, but progress.machines carries 11 real Sr.DEN
+// jurisdictions via m.srden. progressSrdenKeys() is that real universe,
+// reused by both the Progress-vs-Target and Fleet Health (IOH/POH
+// release) banners below, so a jurisdiction with genuinely zero pending
+// items this run still shows up with an honest "0", instead of
+// disappearing as if it didn't exist.
+function progressSrdenKeys(){
+  return [...new Set((DATA.progress.machines||[]).map(m=>m.srden).filter(Boolean))].sort();
+}
 function renderSrdenBannerInto(prefix, opts){
   opts = opts || {};
   const host = document.getElementById('srdenBanner-'+prefix);
   if (!host) return;
   const bundle = DATA.shortfall.srdenBundle;
-  const keys = Object.keys(bundle).sort();
+  const keys = opts.keysFn ? opts.keysFn() : Object.keys(bundle).sort();
   if (!keys.length){ host.style.display = 'none'; return; }
   const rankFn = opts.rankFn || (k=>{
     const b = bundle[k];
@@ -4418,6 +4374,18 @@ function renderOvTypeBox(){
 function renderYoy(){
   const y = DATA.progress.yoy;
   if (!y) return;
+  // 18-Nov-2026 fix per Shruti: this heading/box used to hardcode
+  // "Apr-Sep 2025 vs Apr-Sep 2026" everywhere, so it never caught up once
+  // the sheet had real data past September. priorPeriodLabel/
+  // currentPeriodLabel now come straight from aggregate.py's own
+  // dynamically-derived window (the same one meta.periodCovered uses), so
+  // every label below grows with the sheet instead of staying pinned to
+  // September.
+  const priorLbl = y.priorPeriodLabel || 'Prior year', currentLbl = y.currentPeriodLabel || 'Current year';
+  const headingEl = document.getElementById('yoyHeading');
+  if (headingEl) headingEl.textContent = `Year-on-Year — ${priorLbl} vs ${currentLbl}`;
+  const capEl = document.getElementById('yoyCap');
+  if (capEl) capEl.innerHTML = `Same period, cumulative progress &bull; click a bar for that type's year-on-year detail &bull; figures shown per unit of measure (Km/R-S/T-O/Unit) &mdash; fleet-wide totals are a breakdown since types mix units`;
   const box = document.getElementById('yoyBox');
   // Headline figures (fixed 05-Oct-2026): this box was always showing the
   // fleet-wide prior/current/pct-change totals, even when a machine type was
@@ -4440,9 +4408,9 @@ function renderYoy(){
   const priorTxt = focusRow ? `${priorTotal.toLocaleString()} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(y.byType,'priorYear',rowUnit), n=>n.toLocaleString());
   const currentTxt = focusRow ? `${currentTotal.toLocaleString()} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(y.byType,'currentYear',rowUnit), n=>n.toLocaleString());
   box.innerHTML = `<div class="yoy-row">
-    <div class="yoy-num"><div class="v">${priorTxt}</div><div class="l">Apr&ndash;Sep 2025${focusRow?' &bull; '+esc(focus):''}</div></div>
+    <div class="yoy-num"><div class="v">${priorTxt}</div><div class="l">${esc(priorLbl)}${focusRow?' &bull; '+esc(focus):''}</div></div>
     <div class="yoy-arrow">&rarr;</div>
-    <div class="yoy-num"><div class="v">${currentTxt}</div><div class="l">Apr&ndash;Sep 2026${focusRow?' &bull; '+esc(focus):''}</div></div>
+    <div class="yoy-num"><div class="v">${currentTxt}</div><div class="l">${esc(currentLbl)}${focusRow?' &bull; '+esc(focus):''}</div></div>
     <div class="yoy-delta ${deltaCls}">${arrow} ${totalPctChange!=null? Math.abs(totalPctChange)+'%' : ''}</div>
   </div>`;
   const el = document.getElementById('ovYoyChart');
@@ -4459,11 +4427,11 @@ function renderYoy(){
     onBarClick = (i, si)=>{
       const r = rows[i];
       const u = rowUnit(r);
-      const which = si===0 ? 'Apr–Sep 2025 (prior year)' : 'Apr–Sep 2026 (current year)';
+      const which = si===0 ? `${priorLbl} (prior year)` : `${currentLbl} (current year)`;
       const btnId = 'yoyOpenFull'+Math.random().toString(36).slice(2,9);
       const html = statRow([
-          {l:'Apr–Sep 2025', v: r.priorYear.toLocaleString()+' '+esc(u)},
-          {l:'Apr–Sep 2026', v: r.currentYear.toLocaleString()+' '+esc(u)},
+          {l:priorLbl, v: r.priorYear.toLocaleString()+' '+esc(u)},
+          {l:currentLbl, v: r.currentYear.toLocaleString()+' '+esc(u)},
           {l:'Change', v: (r.pctChange!=null? (r.pctChange>=0?'+':'')+r.pctChange+'%' : '—'), cls:(r.pctChange>=0?'good':'bad')},
         ]) + `<button class="btn primary" id="${btnId}" style="width:100%;margin-top:10px;">Open full machine record (month-by-month, all issues) &rarr;</button>`;
       openDrawer(`${r.machine} — Year on Year`, `${esc(r.type)} &bull; you clicked the ${which} bar`, html);
@@ -4476,14 +4444,14 @@ function renderYoy(){
     onBarClick = (i, si)=>{
       const r = rows[i];
       const u = rowUnit(r);
-      const which = si===0 ? 'Apr–Sep 2025 (prior year)' : 'Apr–Sep 2026 (current year)';
+      const which = si===0 ? `${priorLbl} (prior year)` : `${currentLbl} (current year)`;
       const html = statRow([
-          {l:'Apr–Sep 2025', v: r.priorYear.toLocaleString()+' '+esc(u)},
-          {l:'Apr–Sep 2026', v: r.currentYear.toLocaleString()+' '+esc(u)},
+          {l:priorLbl, v: r.priorYear.toLocaleString()+' '+esc(u)},
+          {l:currentLbl, v: r.currentYear.toLocaleString()+' '+esc(u)},
           {l:'Change', v: (r.pctChange!=null? (r.pctChange>=0?'+':'')+r.pctChange+'%' : '—'), cls:(r.pctChange>=0?'good':'bad')},
         ]) + dcard(`Machines of this type, current year`, null,
           expandSecondary(DATA.progress.machines).filter(m=>m.type===r.type).map(machineRowHtml).join(''));
-      openDrawer(`${r.type} — Year on Year`, `You clicked the ${which} bar &bull; Apr–Sep, cumulative progress`, html);
+      openDrawer(`${r.type} — Year on Year`, `You clicked the ${which} bar &bull; same period, cumulative progress`, html);
     };
   }
   const wrap = el.parentElement;
@@ -4491,8 +4459,8 @@ function renderYoy(){
   svgBar(el, {
     labels, horizontal:true, scaleMode, unitSuffix: (i)=>rowUnit(rows[i]),
     series: [
-      {label:'Apr–Sep 2025', data: rows.map(r=>r.priorYear), color:c.palette[4]},
-      {label:'Apr–Sep 2026', data: rows.map(r=>r.currentYear), color:c.palette[0]},
+      {label:priorLbl, data: rows.map(r=>r.priorYear), color:c.palette[4]},
+      {label:currentLbl, data: rows.map(r=>r.currentYear), color:c.palette[0]},
     ],
     onBarClick
   });
@@ -4550,6 +4518,7 @@ function drawProgressCharts(){
   renderSrdenBannerInto('progress', {
     heading: 'Sr.DEN Alert &mdash; Progress vs Target',
     cap: 'Cumulative progress against pro-rata target, plus year-on-year &bull; pick a jurisdiction below',
+    keysFn: progressSrdenKeys,
     rankFn: k=>{ const s = progressStatsForSrden(k); return s.totalTarget ? (1 - s.overallPct) : -Infinity; },
     messageFn: buildProgressSrdenMessage,
     openFn: openProgressSrdenDrawer,
@@ -4780,6 +4749,7 @@ function drawFleetCharts(){
   renderSrdenBannerInto('fleet', {
     heading: 'Sr.DEN Alert — IOH/POH Release',
     cap: 'Machines this jurisdiction still needs to release for a scheduled IOH/POH &bull; pick a jurisdiction below',
+    keysFn: progressSrdenKeys,
     rankFn: k=> fleetStatsForSrden(k).count,
     countFn: k=> fleetStatsForSrden(k).count,
     countLabel: 'pending release',
@@ -6217,10 +6187,18 @@ function drawCpohPlanning(){
   renderCpohTampingTable();
 }
 
+// infra's own srdenKey universe is broader than progressSrdenKeys() --
+// it covers construction-zone jurisdictions like "SBC New Line" that
+// have no track machines deployed at all, so it needs its own list
+// rather than reusing the machine-based one (see progressSrdenKeys()).
+function infraSrdenKeys(){
+  return [...new Set(((DATA.infra && DATA.infra.stationRows) || []).map(r=>r.srdenKey).filter(Boolean))].sort();
+}
 function drawInfraCharts(){
   renderSrdenBannerInto('infra', {
     heading: 'Sr.DEN Alert — Sidings &amp; Rest Houses',
     cap: 'Proposed sidings/rest houses awaiting this jurisdiction\'s follow-through, plus sanctioned works due for early completion &bull; pick a jurisdiction below',
+    keysFn: infraSrdenKeys,
     rankFn: k=> infraAlertStatsForSrden(k).count,
     countFn: k=> infraAlertStatsForSrden(k).count,
     countLabel: 'pending action',
@@ -7423,7 +7401,7 @@ function ldsRenderValue(value){
 // named field accessors). Only the table body + caption are re-rendered on
 // each keystroke/sort-click -- the search input itself is never replaced --
 // so typing never loses focus (same pattern as this dashboard's existing
-// per-tab search boxes, e.g. setupProgressTable's #pgSearch). ----
+// per-tab search boxes). ----
 function ldsRenderTable(containerId, columns, rows, opts){
   opts = opts || {};
   const host = document.getElementById(containerId);
@@ -7709,31 +7687,58 @@ function ldsSectionHqSummary(hq){
     });
   });
 }
-// ---- Monthly Machine: genuinely variable by design (confirmed in
-// live-sheet-cron-notes.md) -- `months` is really one entry per
-// (month-sheet x machine-type) combination, so entries sharing a category
-// are merged into one flat list of periods for that category. A two-level
-// picker (category -> period) then renders that period's own rows with
-// columns derived from the union of keys actually present: non-numeric
-// keys first (Machine/Section/Scope/Progress achieved/Balance prioritized
-// when present), then day-of-month numeric keys ascending (non-consecutive
-// days are expected, not a bug), with any "Total Progress of all machines"
-// row moved last and shaded, same convention as the Total-row handling
-// elsewhere on this tab. ----
+// ---- Monthly Machine: the payload's own `months` is a DICT keyed by
+// month label ("OCT-26", "SEP-26", ... -- corrected 18-Nov-2026; this
+// used to assume raw.monthlyMachine.months was a flat ARRAY of
+// {category,periods} entries, which never matched the real live shape,
+// so this section always showed "waiting on this table" regardless of
+// what Supabase actually had). Each month's own `categories` list is one
+// entry per machine-type sheet for that month; entries sharing a
+// category are merged ACROSS every month into one flat list of periods
+// for that category (each period already carries its own self-dated
+// periodLabel, e.g. "Date wise machine progress from 01.10.26 to
+// 15.10.2026", tagged here with its month key too since two different
+// months can otherwise look identical in the period picker). A
+// two-level picker (category -> period) then renders that period's own
+// rows with columns derived from the union of keys actually present:
+// non-numeric keys first (Machine/Section/Scope/Progress achieved/
+// Balance prioritized when present), then day-of-month numeric keys
+// ascending (non-consecutive days are expected, not a bug), with any
+// "Total Progress of all machines" row moved last and shaded, same
+// convention as the Total-row handling elsewhere on this tab. ----
 const LDS_MM_COL_PRIORITY = ['machine','section','scope','progressachieved','balance'];
+const LDS_MM_MONTH_NUM = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+function ldsMmMonthSortKey(monthKey){
+  const m = /^\s*([A-Za-z]+)[\s-]?(\d{2,4})\s*$/.exec(String(monthKey||''));
+  if (!m) return [9999, 99];
+  const mon = LDS_MM_MONTH_NUM[m[1].slice(0,3).toLowerCase()] || 99;
+  let yr = parseInt(m[2], 10); if (yr < 100) yr += 2000;
+  return [yr, mon];
+}
+function ldsMmSortedMonthKeys(mm){
+  return Object.keys(mm||{}).sort((a,b)=>{
+    const [ya,ma] = ldsMmMonthSortKey(a), [yb,mb] = ldsMmMonthSortKey(b);
+    return (ya-yb) || (ma-mb);
+  });
+}
 function ldsMmPeriodLabel(period, idx){
   const v = period && typeof period==='object' ? ldsPick(period, ['label','period','name','title','periodLabel']) : null;
-  return (v!=null && String(v).trim()) ? String(v) : 'Period '+(idx+1);
+  const base = (v!=null && String(v).trim()) ? String(v) : 'Period '+(idx+1);
+  return (period && period._month) ? `${period._month} — ${base}` : base;
 }
-function ldsMmGroupByCategory(months){
+function ldsMmGroupByCategory(mm, monthKeys){
   const map = new Map();
-  months.forEach(entry=>{
-    if (!entry) return;
-    const cat = (entry.category!=null && String(entry.category).trim()) ? String(entry.category) : 'Unlabeled';
-    const periods = Array.isArray(entry.periods) ? entry.periods : [];
-    if (!map.has(cat)) map.set(cat, []);
-    const bucket = map.get(cat);
-    periods.forEach(p=>bucket.push(p));
+  (monthKeys || ldsMmSortedMonthKeys(mm)).forEach(mk=>{
+    const monthEntry = mm ? mm[mk] : null;
+    const cats = (monthEntry && Array.isArray(monthEntry.categories)) ? monthEntry.categories : [];
+    cats.forEach(entry=>{
+      if (!entry) return;
+      const cat = (entry.category!=null && String(entry.category).trim()) ? String(entry.category) : 'Unlabeled';
+      const periods = Array.isArray(entry.periods) ? entry.periods : [];
+      if (!map.has(cat)) map.set(cat, []);
+      const bucket = map.get(cat);
+      periods.forEach(p=>bucket.push(Object.assign({}, p, {_month: mk})));
+    });
   });
   return map;
 }
@@ -7760,9 +7765,12 @@ let ldsMmCat = null, ldsMmPeriodIdx = 0;
 function ldsSectionMonthlyMachine(mm){
   const host = document.getElementById('ldsMonthlyMachine');
   if (!host) return;
-  const months = mm && Array.isArray(mm.months) ? mm.months : null;
-  if (!months || !months.length){ host.innerHTML = ldsWaitingNote('Monthly Machine'); return; }
-  const catMap = ldsMmGroupByCategory(months);
+  // mm IS the months dict itself (extract_monthly_machine() returns
+  // payload['months'] directly, not {months: ...}) -- corrected
+  // 18-Nov-2026 alongside the array-vs-dict fix above.
+  const monthKeys = (mm && typeof mm==='object') ? ldsMmSortedMonthKeys(mm) : [];
+  if (!monthKeys.length){ host.innerHTML = ldsWaitingNote('Monthly Machine'); return; }
+  const catMap = ldsMmGroupByCategory(mm, monthKeys);
   const cats = Array.from(catMap.keys());
   if (!cats.length){ host.innerHTML = ldsWaitingNote('Monthly Machine'); return; }
   if (!cats.includes(ldsMmCat)) ldsMmCat = cats[0];
@@ -8198,7 +8206,6 @@ window.addEventListener('resize', ()=>{
 
 safe('hydrateDynamicCaptions', hydrateDynamicCaptions);
 safe('kpis', renderKpis);
-safe('setupProgressTable', setupProgressTable);
 safe('setupExceptionsTable', setupExceptionsTable);
 safe('setupInfraStationTable', setupInfraStationTable);
 safe('setupUcTable', setupUcTable);
@@ -8864,6 +8871,65 @@ function machineKeyAliasedJS(s){
   if (m) return (PREFIX_ALIASES[m[1]]||m[1]) + m[2];
   return k;
 }
+// Shared day-formatter for the Monthly Machine sheet's ISO "YYYY-MM-DD"
+// dates (added 18-Nov-2026, used by both the Network Map popup's "last
+// team's progress" and the machine detail drawer's "last 15 days").
+function fmtIsoDateShort(iso){
+  if (!iso) return '';
+  const parts = String(iso).split('-');
+  if (parts.length!==3) return esc(iso);
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mi = parseInt(parts[1],10)-1;
+  return `${parseInt(parts[2],10)} ${MON[mi]||parts[1]}`;
+}
+// "Last team's progress" (added 18-Nov-2026 per Shruti: "whenever I click
+// on a machine on the maps... below it, I want the last team's progress
+// as shown in the monthly progress sheet. Only progress is shown here.")
+// -- progressMachine.dailyLog comes from aggregate.py's
+// monthly_machine.extract_monthly_machine_by_machine(), already sorted
+// oldest-first, so the LAST entry is simply the most recent day this
+// sheet has a value for that machine (which may be a numeric km/unit
+// figure, or a short remark like "Depot work" on a day with no numeric
+// progress -- shown as-is either way, since that genuinely IS "the last
+// team's progress" for that day). Not every machine has a log (MDU/
+// RBMV/UNI/RMV aren't tracked in this sheet at all) -- renders nothing
+// rather than a confusing "no data" block for those, matching this
+// drawer's existing pattern of simply omitting a stat it doesn't have
+// (see statusStatRow above).
+function lastTeamProgressHtml(progressMachine){
+  if (!progressMachine || !Array.isArray(progressMachine.dailyLog) || !progressMachine.dailyLog.length) return '';
+  const last = progressMachine.dailyLog[progressMachine.dailyLog.length-1];
+  const isNum = typeof last.value === 'number';
+  const valueHtml = isNum
+    ? `${last.value.toLocaleString()} ${esc(progressMachine.unit||'')}`
+    : `<span style="font-size:12.5px;">${esc(String(last.value))}</span>`;
+  return `<div class="nm-dstat-row" style="margin-top:10px;">
+    <div class="nm-dstat" style="flex:1;">
+      <div class="l">Last team's progress &bull; Monthly Progress sheet</div>
+      <div class="v" style="font-size:13px;">${valueHtml} <span style="opacity:.65;font-size:11.5px;">(${esc(fmtIsoDateShort(last.date))})</span></div>
+    </div>
+  </div>`;
+}
+// "Last 15 days, day by day" (added 18-Nov-2026 per Shruti, for the
+// machine detail drawer -- see openMachineDetailDrawer). m.dailyLog is
+// the same per-machine log lastTeamProgressHtml() above reads, already
+// sorted oldest-first; slice(-15) is simply the most recent 15 days this
+// sheet has a value for.
+function last15DaysHtml(m){
+  if (!m || !Array.isArray(m.dailyLog) || !m.dailyLog.length) return '';
+  const entries = m.dailyLog.slice(-15);
+  const rows = entries.map(e=>{
+    const isNum = typeof e.value === 'number';
+    const valHtml = isNum
+      ? `${e.value.toLocaleString()} ${esc(m.unit||'')}`
+      : `<span style="opacity:.75;">${esc(String(e.value))}</span>`;
+    return `<div class="dmachine-card" style="cursor:default;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span class="dmname" style="font-size:12.5px;">${esc(fmtIsoDateShort(e.date))}</span>
+      <span style="font-size:12.5px;text-align:right;">${valHtml}</span>
+    </div>`;
+  }).join('');
+  return dcard('Last 15 days — day by day', `From the Monthly Progress sheet &bull; most recent ${entries.length} day(s) with an entry`, rows);
+}
 function findProgressMachine(name){
   // NOTE: a top-level `const DATA = ...;` in another <script> tag never
   // becomes a `window.DATA` property (only `var`/function declarations do)
@@ -8900,10 +8966,15 @@ function openMachineDrawer(code, idx){
   const bar = progressBarHtml(m);
   const lossHtml = lossReasonsHtml(m);
   const workDone = m.workDone ? `<div class="remarktext"><b>Work done today:</b><br>${esc(m.workDone)}</div>` : '';
+  // 18-Nov-2026: "last team's progress" from the Monthly Progress sheet,
+  // shown below the existing Daily Progress content -- findProgressMachine
+  // is the same cross-sheet lookup the "View full-year Progress vs
+  // Target" button below already uses.
+  const lastTeamHtml = lastTeamProgressHtml(findProgressMachine(m.machine));
   const confPill = `<span class="conf-pill ${conf}"><span class="ring"></span>${esc(CONF_LABEL[conf]||conf)}</span>`;
   const src = `<div class="srcline">${confPill}<br><br>Position source: ${esc(m.source||'not available')}</div>`;
   const gotoBtn = `<button class="nm-gotoprogress" data-gotomachine="${esc(m.machine)}">View this machine's full-year Progress vs Target &rarr;</button>`;
-  openDrawer(esc(m.machine), `Section: ${esc(m.block||'&mdash;')} &bull; Daily Progress as of ${esc(NMDATA.kpi.asOf||'')}`, back+gotoBtn+stats+bullets+bar+lossHtml+workDone+src);
+  openDrawer(esc(m.machine), `Section: ${esc(m.block||'&mdash;')} &bull; Daily Progress as of ${esc(NMDATA.kpi.asOf||'')}`, back+gotoBtn+stats+bullets+bar+lossHtml+workDone+lastTeamHtml+src);
   const backBtn = document.querySelector('#nmDBody [data-backto]');
   if (backBtn) backBtn.addEventListener('click', ()=> openStationDrawer(backBtn.dataset.backto));
   const gBtn = document.querySelector('#nmDBody [data-gotomachine]');
