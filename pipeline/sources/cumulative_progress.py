@@ -33,14 +33,18 @@ Both read the same live row here (fetch_payload() is called once), so
 each extract_* function below takes that same payload dict rather than
 doing its own REST call.
 
-ONE DELIBERATE CARRYOVER LIMITATION (not introduced by this adapter -
-already flagged by cumulative_progress_sync.gs's own header comment):
-run_pipeline.py's MONTH_ABBR is hardcoded to ['Apr'..'Sep'], so both
-functions below only sum/copy the April-September columns even though the
-live payload already carries the full Apr-Mar year. This keeps this
-adapter's output byte-for-byte comparable to the Cowork-side Artifact
-(which still runs the unmodified local-file pipeline) for this rebuild;
-extending past September is a follow-up, not part of this port.
+HISTORICAL NOTE (superseded): this adapter used to inherit a carryover
+limitation from run_pipeline.py's then-hardcoded MONTH_ABBR (['Apr'..
+'Sep']), so both functions below only summed/copied the April-September
+columns even though the live payload already carries the full Apr-Mar
+year. pipeline_helpers.MONTH_ABBR was fixed to the full 12-month list on
+13-Nov-2026, so extract_cum_progress's own per-machine month copy
+(elsewhere in this file) already reflects the whole year. 18-Nov-2026:
+extract_prior_year_by_type() below now also takes an explicit `months`
+window (defaulting to the full FY) so aggregate.py's YoY comparison can
+pass it "however far the current FY has actually elapsed" -- matching
+the current-year side exactly -- instead of either side being pinned to
+a fixed span.
 """
 import re
 
@@ -155,27 +159,33 @@ def extract_cum_progress(payload, home_div, bare_type_div, norm):
     return records
 
 
-def extract_prior_year_by_type(payload):
+def extract_prior_year_by_type(payload, months=None):
     """-> (prior_by_type, prior_total, prior_by_machine,
-    prior_by_type_secondary, prior_by_machine_secondary), matching
-    run_pipeline.py's extract_prior_year_by_type(base) exactly - summing
-    only the Apr-Sep columns per machine (the YoY comparison is always
-    "same period, year over year"), grouped by *display* type
-    (disp_type(mtype_of(name))), not the raw regex prefix used for
-    MachineType in extract_cum_progress above - this is run_pipeline.py's
-    own existing (and slightly inconsistent) behaviour, reproduced as-is
-    rather than "fixed" here, since fixing it would make this adapter's
-    output disagree with the Cowork-side Artifact's YoY numbers for the
-    same date. Returns (None, 0.0, None, None, None) if there is no prior
-    FY tab yet, matching the local-file version's own "not found" return
-    shape so aggregate.py can check `prior_by_type is not None` exactly
-    like run_pipeline.py's run() already does."""
+    prior_by_type_secondary, prior_by_machine_secondary), grouped by
+    *display* type (disp_type(mtype_of(name))), not the raw regex prefix
+    used for MachineType in extract_cum_progress above.
+
+    `months`: which MONTH_ABBR-style columns (e.g. ['Apr','May','Jun'])
+    to sum per row. Defaults to the full ph.MONTH_ABBR (all 12 FY months)
+    when omitted, for backward compatibility with callers/tests that want
+    a plain full-year total. aggregate.py's run() instead passes the same
+    dynamically-derived "Apr through however far the Cumulative Progress
+    sheet currently extends" window it uses on the current-year side
+    (via _elapsed_fy_months), so the YoY comparison's prior-year and
+    current-year sides are always summing the identical span -- fixed
+    18-Nov-2026: this used to always sum the full prior FY regardless of
+    how much of the current FY had actually elapsed, which overstated the
+    prior-year side of the "same period" comparison once the current
+    year's own window stopped being hardcoded to Apr-Sep. Returns
+    (None, 0.0, None, None, None) if there is no prior FY tab yet, so
+    aggregate.py can check `prior_by_type is not None`."""
     years = (payload or {}).get("years") or {}
     _current_fy, prior_fy = _current_and_prior_fy(years)
     if not prior_fy:
         return None, 0.0, None, None, None
 
     rows = years[prior_fy].get("rows") or []
+    window = months if months is not None else ph.MONTH_ABBR
 
     prior_by_type = {}
     prior_by_machine = {}
@@ -184,7 +194,7 @@ def extract_prior_year_by_type(payload):
     prior_by_machine_secondary = {}
 
     def month_sum(r):
-        return sum(v for v in (r.get(abbr) for abbr in ph.MONTH_ABBR) if isinstance(v, (int, float)))
+        return sum(v for v in (r.get(abbr) for abbr in window) if isinstance(v, (int, float)))
 
     for r in rows:
         if r.get("RowType") == "machine":
