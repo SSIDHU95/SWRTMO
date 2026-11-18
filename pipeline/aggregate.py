@@ -205,6 +205,39 @@ def _cum_as_of_date(cum_records, fy_start_year):
         return None
 
 
+def _elapsed_fy_months(cum_as_of, fy_year):
+    """Returns (month_abbrs, period_phrase) for FY `fy_year` (Apr-start):
+    month_abbrs is the prefix of MONTH_ABBR (e.g. ['Apr','May',...]) up to
+    and including whichever month cum_as_of falls in, and period_phrase is
+    the matching human label fragment with the year left out -- "Apr-Sep"
+    once the FY has reached 28-Sep or later, else "Apr - <day> <mon>".
+    This mirrors build_base_payload()'s own cum_period_label logic exactly
+    (same 28-Sep threshold, same phrase shapes), so any caller using this
+    helper's window/phrase always describes the same span as
+    meta.periodCovered -- added 18-Nov-2026 so the YoY comparison (which
+    used to hardcode ['apr'..'sep'] in three places) can use "however far
+    the sheet's data currently extends" instead of a fixed 6-month cap,
+    for BOTH sides of the "same period" comparison. Falls back to the
+    full 12-month FY when cum_as_of can't be derived (no
+    ProportionateTarget/TargetPerMonth samples) or falls outside
+    fy_year's own Apr-Mar span -- same defensive fallback
+    build_base_payload() uses for cum_period_label."""
+    order = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+    valid = cum_as_of is not None
+    if valid:
+        expected_year = fy_year if cum_as_of.month >= 4 else fy_year + 1
+        valid = cum_as_of.year == expected_year
+    if not valid:
+        return list(MONTH_ABBR), f"{MONTH_ABBR[0]}–{MONTH_ABBR[-1]}"
+    idx = order.index(cum_as_of.month)
+    months = MONTH_ABBR[:idx + 1]
+    if cum_as_of.month == 9 and cum_as_of.day >= 28:
+        phrase = "Apr–Sep"
+    else:
+        phrase = f"Apr – {cum_as_of.strftime('%-d %b')}"
+    return months, phrase
+
+
 def _secondary_dict(sec):
     """Builds the client-facing `secondary` sub-object (BCM's Turnout/T/O
     line). Copied verbatim from run_pipeline.py."""
@@ -330,9 +363,9 @@ def extract_cum_progress(base, home_div, bare_type_div, norm):
     return cumulative_progress.extract_cum_progress(payload, home_div, bare_type_div, norm)
 
 
-def extract_prior_year_by_type(base=None):
+def extract_prior_year_by_type(base=None, months=None):
     payload = _cached_payload(cumulative_progress)
-    return cumulative_progress.extract_prior_year_by_type(payload)
+    return cumulative_progress.extract_prior_year_by_type(payload, months=months)
 
 
 def extract_shortfall_records(base=None):
@@ -1138,6 +1171,27 @@ def run(outdir, as_of=None):
     p['progress']['machines'] = new_machines
     p['progress']['tampingRollup'] = dict(Counter(m['tamping'] for m in new_machines))
 
+    # ---- Monthly Machine sheet: per-machine day-by-day log (added
+    # 18-Nov-2026 per Shruti: "there is one monthly machine progress
+    # sheet also, which we already have taken in Supabase... connected
+    # with the monthly progress sheet") -- feeds the Network Map popup's
+    # "last team's progress" (just the most recent day) and the machine
+    # detail drawer's "last 15 days" day-by-day breakdown. _cached_payload
+    # means this never re-fetches monthly_machine even though
+    # extract_raw_sources() above already fetched it for rawSources.
+    # Not every machine has a row here -- MDU/RBMV/UNI/RMV aren't tracked
+    # in this sheet at all (confirmed against live data) -- so dailyLog
+    # is simply [] for those, which the frontend treats as "no data for
+    # this machine", not an error.
+    try:
+        mm_by_machine = monthly_machine.extract_monthly_machine_by_machine(_cached_payload(monthly_machine))
+    except Exception as e:
+        log(f"WARN: monthly_machine_by_machine fetch/extract failed ({e}) - "
+            f"m.dailyLog will be [] for every machine this run.")
+        mm_by_machine = {}
+    for m in p['progress']['machines']:
+        m['dailyLog'] = mm_by_machine.get(ph.machine_key_aliased(ph.norm_machine(m['machine'])), [])
+
     # ---- IOH/POH days-elapsed AND days-designated (added 13-Nov-2026 per
     # Shruti: "add an IOH/POH remark at the bottom of this chart... you're
     # showing it as zero... take it directly from the exception sheet").
@@ -1446,8 +1500,23 @@ def run(outdir, as_of=None):
                                       srdenMessages=srden_ds_messages)
 
     # ---- YoY comparison ----
+    # 18-Nov-2026 fix: this used to hardcode ['apr'..'sep'] on the current-
+    # year side (in three separate places) while the prior-year side
+    # (extract_prior_year_by_type's own month_sum) summed the FULL 12-month
+    # FY -- so the "same period" comparison wasn't actually comparing the
+    # same period once the live sheet had real data past September, and it
+    # never caught up as the sheet kept filling in. Both sides now use the
+    # same dynamically-derived "Apr through however far the Cumulative
+    # Progress sheet's own ProportionateTarget actually reaches" window
+    # (_elapsed_fy_months, mirroring meta.periodCovered's own logic), so
+    # the comparison -- and its label -- grows with the sheet instead of
+    # staying pinned to September.
+    _yoy_fy_year = as_of.year if as_of.month >= 4 else as_of.year - 1
+    _yoy_cum_as_of = _cum_as_of_date(cum_records, _yoy_fy_year)
+    elapsed_months, yoy_period_phrase = _elapsed_fy_months(_yoy_cum_as_of, _yoy_fy_year)
+    elapsed_months_lower = [a.lower() for a in elapsed_months]
     prior_by_type, prior_total, prior_by_machine, prior_by_type_secondary, prior_by_machine_secondary = \
-        extract_prior_year_by_type(base)
+        extract_prior_year_by_type(base, months=elapsed_months)
     if prior_by_type is not None:
         cur_by_type = defaultdict(float)
         cur_total = 0.0
@@ -1455,13 +1524,13 @@ def run(outdir, as_of=None):
         cur_by_machine_secondary = {}
         for m in p['progress']['machines']:
             s = sum((m.get(k) if isinstance(m.get(k), (int, float)) else 0) for k in
-                    ['apr', 'may', 'jun', 'jul', 'aug', 'sep'])
+                    elapsed_months_lower)
             cur_by_type[m['type']] += s
             cur_total += s
             sec = m.get('secondary')
             if sec:
                 ss = sum((sec.get(k) if isinstance(sec.get(k), (int, float)) else 0) for k in
-                         ['apr', 'may', 'jun', 'jul', 'aug', 'sep'])
+                         elapsed_months_lower)
                 t = f"{m['type']} ({sec['unit']})"
                 cur_by_type_secondary[t] += ss
                 cur_by_machine_secondary[f"{ph.machine_key(m['machine'])}|{sec['unit']}"] = ss
@@ -1487,7 +1556,7 @@ def run(outdir, as_of=None):
         if prior_by_machine is not None:
             for m in p['progress']['machines']:
                 cv = sum((m.get(k) if isinstance(m.get(k), (int, float)) else 0) for k in
-                         ['apr', 'may', 'jun', 'jul', 'aug', 'sep'])
+                         elapsed_months_lower)
                 pv = prior_by_machine.get(ph.machine_key(m['machine']))
                 pv = round(pv, 2) if pv is not None else 0.0
                 cv = round(cv, 2)
@@ -1508,8 +1577,17 @@ def run(outdir, as_of=None):
                                                 isSecondaryMetric=True, baseMachine=m['machine'], div=m['div'],
                                                 priorYear=spv, currentYear=scv, delta=sdelta, pctChange=spct))
 
+        # priorPeriodLabel/currentPeriodLabel (added 18-Nov-2026): clean
+        # single-year labels (e.g. "Apr–13 Nov 2025"/"Apr–13 Nov 2026") so
+        # the frontend's chart headings/legends/drawer text can show the
+        # dynamic window without parsing it back out of `label` -- every
+        # "Apr–Sep 2025"/"Apr–Sep 2026" literal in index.html's renderYoy()
+        # and its drawers gets swapped for these.
         p['progress']['yoy'] = dict(
-            label=f'Apr–Sep {as_of.year-1} vs Apr–Sep {as_of.year} (cumulative progress, same period)',
+            label=f'{yoy_period_phrase} {as_of.year-1} vs {yoy_period_phrase} {as_of.year} '
+                  f'(cumulative progress, same period)',
+            priorPeriodLabel=f'{yoy_period_phrase} {as_of.year-1}',
+            currentPeriodLabel=f'{yoy_period_phrase} {as_of.year}',
             priorTotal=round(prior_total, 2), currentTotal=round(cur_total, 2),
             totalDelta=round(cur_total - prior_total, 2),
             totalPctChange=round((cur_total - prior_total) / prior_total * 100, 1) if prior_total else None,
