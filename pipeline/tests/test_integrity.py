@@ -158,6 +158,35 @@ class TestPipelineHelpers(unittest.TestCase):
         for raw in ('FRM', 'PBR', 'SQRS', 'T', 'WST', 'PCT'):
             self.assertNotIn(raw, ph.TAMPING_INFO, f"{raw} should not be its own TAMPING_INFO key any more")
 
+    def test_elapsed_fy_months_dynamic_window(self):
+        # 18-Nov-2026 fix: the YoY comparison used to hardcode
+        # ['apr'..'sep'] regardless of how far the live Cumulative
+        # Progress sheet's own data actually extended. _elapsed_fy_months
+        # is the shared helper that now derives "Apr through however far
+        # the sheet reaches" for BOTH sides of that comparison, mirroring
+        # build_base_payload()'s own cum_period_label thresholds exactly.
+        months, phrase = aggregate._elapsed_fy_months(datetime.date(2026, 11, 13), 2026)
+        self.assertEqual(months, ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'])
+        self.assertEqual(phrase, 'Apr – 13 Nov')
+
+        # The 28-Sep-or-later special case collapses to the short "Apr-Sep"
+        # phrase, same threshold build_base_payload() uses for periodCovered.
+        months, phrase = aggregate._elapsed_fy_months(datetime.date(2026, 9, 29), 2026)
+        self.assertEqual(months, ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'])
+        self.assertEqual(phrase, 'Apr–Sep')
+
+        # No derivable as-of date (e.g. no ProportionateTarget/TargetPerMonth
+        # samples) falls back to the full 12-month FY, never silently
+        # reverting to the old 6-month Apr-Sep cap.
+        months, phrase = aggregate._elapsed_fy_months(None, 2026)
+        self.assertEqual(months, ph.MONTH_ABBR)
+        self.assertEqual(phrase, 'Apr–Mar')
+
+        # A cum_as_of outside fy_year's own Apr-Mar span is treated as
+        # undated input, same defensive fallback.
+        months, _ = aggregate._elapsed_fy_months(datetime.date(2099, 1, 1), 2026)
+        self.assertEqual(months, ph.MONTH_ABBR)
+
     def test_mtype_of_extracts_leading_letters(self):
         self.assertEqual(ph.mtype_of('BCM-351'), 'BCM')
         self.assertEqual(ph.mtype_of('T-28 (403&404)'), 'T')
@@ -312,6 +341,67 @@ class TestSourceAdapters(unittest.TestCase):
         # CurrentDIV ("MYS", e.g. on deputation) - home_div always wins
         # over CurrentDIV when a match is found (see extract_cum_progress).
         self.assertEqual(by_machine['FRM 1889']['HomeDivision'], 'UBL')
+
+    def test_extract_prior_year_by_type_months_window(self):
+        # 18-Nov-2026 fix: extract_prior_year_by_type() used to always sum
+        # the FULL prior FY regardless of how much of the current FY had
+        # elapsed, which overstated the prior-year side of the YoY "same
+        # period" comparison once the current-year side stopped being
+        # hardcoded to Apr-Sep. No live fixture needed: a synthetic
+        # payload with the real "years" shape, full 12 months filled in
+        # for both FY tabs (as a completed prior FY would have).
+        row = {"Machine": "BCM-351", "RowType": "machine",
+               "Apr": 1.0, "May": 1.0, "Jun": 1.0, "Jul": 1.0, "Aug": 1.0, "Sep": 1.0,
+               "Oct": 1.0, "Nov": 1.0, "Dec": 1.0, "Jan": 1.0, "Feb": 1.0, "Mar": 1.0}
+        payload = {"years": {"2025-2026": {"rows": [row]}, "2026-2027": {"rows": [row]}}}
+
+        # Default (no months passed): full 12-month total, for backward
+        # compatibility with callers that want a plain full-year sum.
+        prior_by_type, prior_total, _, _, _ = cumulative_progress.extract_prior_year_by_type(payload)
+        self.assertEqual(prior_total, 12.0)
+
+        # An explicit window sums only those columns - this is what
+        # aggregate.py's run() now passes (the same dynamically-derived
+        # "Apr through however far the sheet currently reaches" window
+        # used on the current-year side), so both sides of the YoY
+        # comparison are always summing the identical span.
+        prior_by_type, prior_total, _, _, _ = cumulative_progress.extract_prior_year_by_type(
+            payload, months=['Apr', 'May', 'Jun'])
+        self.assertEqual(prior_total, 3.0)
+        self.assertEqual(prior_by_type['BCM'], 3.0)
+
+    def test_extract_monthly_machine_by_machine(self):
+        # 18-Nov-2026 (new feature per Shruti): synthetic payload in the
+        # real live shape (months as a DICT, confirmed against the live
+        # sync - this adapter used to claim/assume a list). Covers: (a)
+        # the BRM/PBR cross-sheet join-key aliasing, (b) a blank-machine
+        # "Total Progress" row being skipped, (c) a numeric value and a
+        # remark-string value both surviving, (d) '-'/empty being treated
+        # as "no entry that day", and (e) the "NOV 26" (space, not
+        # hyphen) month-tab naming slip on her own sheet still parsing.
+        payload = {"months": {
+            "OCT-26": {"categories": [{"category": "BRM", "title": "BRM...", "periods": [
+                {"rows": [
+                    {"machine": "BRM 04", "daily": {"1": 0.26, "2": "Depot work", "3": "-", "4": None}},
+                    {"machine": "Total Progress of all machines", "daily": {"1": 0.26}},
+                ]},
+            ]}]},
+            "NOV 26": {"categories": [{"category": "BRM", "title": "BRM...", "periods": [
+                {"rows": [{"machine": "BRM 04", "daily": {"1": 9.6}}]},
+            ]}]},
+        }}
+        by_machine = monthly_machine.extract_monthly_machine_by_machine(payload)
+        self.assertIn('PBR4', by_machine)  # BRM 04 -> aliased join key, same as Cumulative Progress's "PBR 04"
+        self.assertNotIn('BRM4', by_machine)
+        log = by_machine['PBR4']
+        self.assertEqual(log, [
+            {"date": "2026-10-01", "value": 0.26},
+            {"date": "2026-10-02", "value": "Depot work"},
+            {"date": "2026-11-01", "value": 9.6},
+        ])
+        # The blank-named "Total Progress" summary row must never show up
+        # as its own machine.
+        self.assertTrue(all('total' not in k.lower() for k in by_machine.keys()))
 
     @skip_if_missing(f"{FIXTURE_DIR}/cumulative_progress_latest.json")
     def test_cumulative_progress(self, payload):
@@ -560,6 +650,17 @@ class TestAggregateEndToEnd(unittest.TestCase):
         raw = self.payload.get('rawSources') or {}
         for key in ('cumulativeFailure', 'dailyPositions', 'monthlyMachine', 'shortfallReasonsRaw'):
             self.assertIn(key, raw, f"rawSources missing '{key}' - an empty-payload extract_* must not raise")
+
+    def test_every_machine_has_daily_log_key_even_with_no_monthly_machine_data(self):
+        # 18-Nov-2026: m['dailyLog'] (feeding the Network Map popup's "last
+        # team's progress" and the machine detail drawer's "last 15 days")
+        # must degrade to [] per machine, never a missing key or a crash,
+        # when monthly_machine has no live data this run (stubbed to {}
+        # above) - same "never raise on an empty for-later-use source"
+        # discipline as test_raw_sources_attached_for_for_later_use_tables.
+        for m in self.payload['progress']['machines']:
+            self.assertIn('dailyLog', m)
+            self.assertEqual(m['dailyLog'], [])
         for key in ('hqSummary', 'rdpsPoints'):
             self.assertNotIn(key, raw, f"rawSources should no longer include '{key}' (intentionally dropped)")
 
