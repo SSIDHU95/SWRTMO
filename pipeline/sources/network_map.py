@@ -112,6 +112,7 @@ function over already-fetched rdps_points rows + a daily_positions
 payload, so it is fully unit-testable with synthetic data and never
 touches the network itself. See tests/test_network_map.py.
 """
+import math
 import re
 from collections import Counter
 
@@ -123,6 +124,7 @@ import pipeline_helpers as ph
 # for every adapter's `import supabase_client`/`import pipeline_helpers`.
 from . import rdps_points
 from . import daily_positions
+from . import daily_progress_srden
 
 # ---------------------------------------------------------------------
 # Static reference tables -- copied verbatim from the last baked
@@ -358,6 +360,74 @@ def build_stations_from_rdps(rdps_by_div):
 # ---------------------------------------------------------------------
 MAX_POINTS_PER_ROUTE = 400
 
+# ---------------------------------------------------------------------
+# Fixed 18-Nov-2026: a route's survey points occasionally have a real
+# GAP in chainage coverage -- a stretch that was simply never surveyed
+# (or never synced) between two km values that ARE recorded. Sorting by
+# km and connecting every consecutive point with a straight line (what
+# this module has always done) then draws one long, dead-straight
+# "teleport" line directly between the last point before the gap and
+# the first point after it, however far apart they really are --
+# visually a thin line cutting across completely unrelated geography.
+# Reported by Shruti directly off the live map: a line from the
+# Chikjajur/Davangere area all the way to the Chikmagalur/Tumakuru area
+# (MYS "DRU-CMGR", a 152km jump at km 45->54), and a second one near
+# Jolarpet/Malur (SBC "SBC-JTJ DN", a 92km jump at km 0->215).
+# Confirmed directly against the live rdps_points table (all 430,317
+# consecutive-point gaps across every (division, route) group, sorted
+# the same way this function sorts them): normal survey spacing is a
+# few metres (median ~10m); a long tail of sparser-but-still-real
+# stretches climbs gradually up to 16.4km (37 gaps exceed 10km, the
+# largest 22 of them all on UBL's own "GDG-HG UP" route alone, each a
+# legitimate ~11.6-12.5km sparse patch, not a break); then there is a
+# dead zone with NOT ONE gap anywhere between 16.401km and 51.211km;
+# then exactly 3 gaps sit far past it -- 51.2km (MYS "JRU-UBL"), 91.8km
+# (SBC "SBC-JTJ DN") and 152.2km (MYS "DRU-CMGR") -- the 3 routes
+# Shruti's screenshots actually showed a straight line crossing
+# unrelated geography on. GAP_THRESHOLD_KM=20 sits in the middle of
+# that dead zone: comfortably above every legitimate sparse stretch
+# found anywhere in the live data (even its biggest, 16.4km) and
+# comfortably below all 3 genuine breaks (its nearest, 51.2km, is well
+# over double this threshold).
+#
+# The fix: split a route into separate contiguous segments wherever a
+# gap this large occurs, instead of ever drawing a line across it.
+# Nothing here invents or interpolates the missing stretch -- the two
+# segments on either side just stop being connected, which is the
+# honest picture (there is no actual survey data for that stretch, so
+# there is nothing true to draw there). Decimation (_decimate() below)
+# is applied per segment, AFTER splitting, so it can never itself pick
+# a last/first point pair that straddles a gap as its own anchor.
+# ---------------------------------------------------------------------
+GAP_THRESHOLD_KM = 20
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance in km between two lat/lon points."""
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _split_at_gaps(rows_sorted, threshold_km=GAP_THRESHOLD_KM):
+    """-> a list of row-lists: `rows_sorted` broken into one or more
+    contiguous segments, split wherever the great-circle distance
+    between two consecutive (already-sorted) rows exceeds
+    `threshold_km`. A single-segment list (the common case) when no gap
+    is found."""
+    if not rows_sorted:
+        return []
+    segments = [[rows_sorted[0]]]
+    for prev, cur in zip(rows_sorted, rows_sorted[1:]):
+        d = _haversine_km(prev['lat'], prev['lon'], cur['lat'], cur['lon'])
+        if d > threshold_km:
+            segments.append([])
+        segments[-1].append(cur)
+    return segments
+
 
 def _decimate(rows_sorted, max_points=MAX_POINTS_PER_ROUTE):
     """-> a subset of rows_sorted with at most max_points entries,
@@ -385,6 +455,20 @@ def build_tracks_from_rdps(rdps_by_div):
     where the old local sbc.json/mys.json/ubl.json files used `sheet`
     -- same concept, live table's own column name.
 
+    Fixed 18-Nov-2026: a route whose chainage has a genuine survey GAP
+    (see GAP_THRESHOLD_KM's comment above) now comes back as MULTIPLE
+    `{"sheet": route, "pts": [...]}` entries -- one per side of the gap
+    -- instead of a single entry whose polyline used to jump straight
+    across it. Both the Leaflet rendering on the website and this
+    function's own caller (build_network_map) only ever care about
+    "a route's drawable polylines", not "exactly one polyline per
+    route", so emitting 2-3 entries that happen to share a `sheet` name
+    needs no change anywhere else -- confirmed by reading how `sheets`
+    is consumed downstream before making this change. Decimation is
+    applied to EACH segment separately, after splitting, so it can
+    never pick its own first/last anchor points from opposite sides of
+    a gap.
+
     Does NOT re-run the anchor-guided outlier-rejection pass the one-off
     geometry-cleaning scripts (clean_tracks.py through clean_tracks4.py,
     documented in claude/network-map-tab-concept.md) used to fix stray/
@@ -392,11 +476,11 @@ def build_tracks_from_rdps(rdps_by_div):
     live `rdps_points` table already holds Shruti's own corrected survey
     data (rdps_sync.gs is run by hand only once a fresh correction pass
     is ready, never on a raw/unreviewed extract), so this function
-    trusts the table's points as given, sorted by chainage (then
-    decimated purely for payload size, not for data quality). If a
-    future survey correction ever reintroduces stray points, re-applying
-    that same cleaning method to this live path -- not redoing it from
-    scratch -- would be the fix.
+    trusts the table's points as given, sorted by chainage (then split
+    at real gaps and decimated purely for payload size, neither for
+    data quality). If a future survey correction ever reintroduces
+    stray points, re-applying that same cleaning method to this live
+    path -- not redoing it from scratch -- would be the fix.
     """
     out = {}
     for div, pts in (rdps_by_div or {}).items():
@@ -411,8 +495,9 @@ def build_tracks_from_rdps(rdps_by_div):
             rows_sorted = sorted(
                 rows, key=lambda r: (r.get('km') if r.get('km') is not None else 0,
                                       r.get('distanceM') if r.get('distanceM') is not None else 0))
-            rows_thinned = _decimate(rows_sorted)
-            sheets.append(dict(sheet=route, pts=[[r['lat'], r['lon']] for r in rows_thinned]))
+            for segment in _split_at_gaps(rows_sorted):
+                rows_thinned = _decimate(segment)
+                sheets.append(dict(sheet=route, pts=[[r['lat'], r['lon']] for r in rows_thinned]))
         out[div] = sheets
     return out
 
@@ -471,12 +556,13 @@ def _is_header_leakage(machine, stabled_at):
     return m == 'machine' or s == 'stabled at'
 
 
-def build_network_map(rdps_rows, positions_payload):
+def build_network_map(rdps_rows, positions_payload, srden_payload=None):
     """Pure function: combines already-fetched `rdps_points` rows (as
-    rdps_points.fetch_rows() returns them) and an already-fetched
+    rdps_points.fetch_rows() returns them), an already-fetched
     `daily_positions` payload (as daily_positions.fetch_payload()
-    returns `payload`, the first element of its tuple) into the live
-    `networkMap` shape:
+    returns `payload`, the first element of its tuple), and -- as of
+    18-Nov-2026 -- an already-fetched `daily_progress_srden` payload
+    (same shape, optional) into the live `networkMap` shape:
 
         {stations: {<code>: {lat, lon, code, div, confidence, kind,
                               depotLabel, machines: [...]}, ...},
@@ -486,12 +572,31 @@ def build_network_map(rdps_rows, positions_payload):
 
     Each per-machine entry under a station's `machines` list, and each
     entry in `unmatched`, carries {machine, type, typeName, cat, div,
-    stabledAt, station?, posConfidence?, source?, reason?} plus -- as of
-    14-Nov-2026 -- whichever of daily_positions.DETAIL_FIELDS that
-    machine's row actually had (blockSection, majorSection, block/
+    stabledAt, station?, posConfidence?, source?, reason?, srDen?} plus
+    -- as of 14-Nov-2026 -- whichever of daily_positions.DETAIL_FIELDS
+    that machine's row actually had (blockSection, majorSection, block/
     duration/progress figures, remarks, etc. -- see this module's
     "HONEST DEGRADATION" docstring section above for the exact list and
     what is still genuinely absent).
+
+    Fixed 18-Nov-2026: `srDen`, when present, is a bare jurisdiction
+    letter ('N'/'S'/'E'/'W'/'C'/'HQ') -- exactly what the website's own
+    `SRDEN_CODES` list and its "Jump closer by Sr.DEN jurisdiction" box
+    (`renderSrdenJump()` in index.html) expect on `m.srDen`. Until this
+    fix, this function never set that field at all (the live rebuild
+    of this map, 13/14-Nov-2026, never looked at the Sr.DEN table), so
+    that jump box always read "No Sr.DEN jurisdiction data in today's
+    Daily Progress" regardless of the day's real data -- confirmed by
+    reading index.html's renderSrdenJump() plus this function's old
+    source side by side; it was never a missing-data problem, only a
+    missing join. The jurisdiction itself genuinely lives in the
+    separate `daily_progress_srden` table (sources/daily_progress_srden.py,
+    Shruti's own deliberately-narrower 14-Nov-2026 sync of just this one
+    field) -- NOT in daily_positions -- same two-tables-one-sheet split
+    aggregate.py's v4 Sr.DEN-attach step already relies on. `srden_payload`
+    defaults to None (and a lookup miss leaves `srDen` off the entry
+    entirely, never fabricated) so this stays backward-compatible with
+    any caller -- and every existing test -- that doesn't pass it.
 
     Also returns mtype/catMeta/divColor/divName/typeGroup/kpi, making
     this payload fully self-contained -- see the module docstring for
@@ -504,6 +609,7 @@ def build_network_map(rdps_rows, positions_payload):
     tracks_by_div = build_tracks_from_rdps(rdps_by_div)
 
     positions = daily_positions.extract_positions(positions_payload)
+    srden_lookup = daily_progress_srden.extract_srden(srden_payload).get('srden') or {}
 
     stations_out = {}
     unmatched = []
@@ -524,6 +630,14 @@ def build_network_map(rdps_rows, positions_payload):
         for field in daily_positions.DETAIL_FIELDS:
             if field in p:
                 entry[field] = p[field]
+        # Added 18-Nov-2026: bare jurisdiction letter for the website's
+        # Sr.DEN jump box -- see this function's docstring entry above.
+        # srden_lookup's values are canonical "<DIV> Sr.DEN/<code>"
+        # keys (pipeline_helpers.canon_srden's own format); only the
+        # trailing code is what index.html's SRDEN_CODES check wants.
+        srden_hit = srden_lookup.get(ph.machine_key_aliased(ph.norm_machine(machine)))
+        if srden_hit:
+            entry['srDen'] = srden_hit.rsplit('/', 1)[-1]
         found_code, found_info = match_machine_to_station(stabled_at, stations_geo)
         if found_info:
             entry['station'] = found_code
