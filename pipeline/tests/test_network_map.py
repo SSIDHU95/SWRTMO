@@ -466,6 +466,49 @@ class TestBuildNetworkMapEndToEnd(unittest.TestCase):
                     self.assertEqual(len(pt), 2)
 
 
+class TestTypeAliasMerge(unittest.TestCase):
+    """Regression tests for the 18-Nov-2026 fix: a machine recorded under
+    a raw alias prefix (PBR/FRM/SQRS/T/WST) must come through this map
+    with its real canonical type, not as a phantom type of its own -
+    same SWR_Machine_Details_1.xlsx-driven fix as pipeline_helpers.py's
+    disp_type()/TAMPING_INFO changes."""
+
+    def _one_machine_result(self, machine_name):
+        positions_payload = {
+            "asOfDate": "18.11.2026",
+            "machines": [{"machine": machine_name, "stabledAt": None, "div": "SBC"}],
+        }
+        return network_map.build_network_map([], positions_payload)
+
+    def test_pbr_machine_comes_through_as_brm(self):
+        result = self._one_machine_result("PBR 04")
+        m = result['unmatched'][0]
+        self.assertEqual(m['type'], 'BRM')
+        self.assertEqual(m['cat'], 'nontamping')
+        self.assertIn('BRM', result['mtype'])
+        self.assertNotIn('PBR', result['mtype'])
+
+    def test_frm_machine_comes_through_as_sbcm(self):
+        result = self._one_machine_result("FRM 1889")
+        m = result['unmatched'][0]
+        self.assertEqual(m['type'], 'SBCM')
+        self.assertNotIn('FRM', result['mtype'])
+
+    def test_sqrs_machine_comes_through_as_tle(self):
+        result = self._one_machine_result("SQRS 37 & 38")
+        self.assertEqual(result['unmatched'][0]['type'], 'TLE')
+
+    def test_t28_machine_comes_through_as_pccm(self):
+        result = self._one_machine_result("T-28 (403&404)")
+        self.assertEqual(result['unmatched'][0]['type'], 'PCCM')
+
+    def test_wst_machine_comes_through_as_duo_tamping(self):
+        result = self._one_machine_result("WST-01")
+        m = result['unmatched'][0]
+        self.assertEqual(m['type'], 'DUO')
+        self.assertEqual(m['cat'], 'tamping')
+
+
 class TestSrDenJoin(unittest.TestCase):
     """Fixed 18-Nov-2026: see build_network_map's docstring entry on
     this date -- this join is what feeds index.html's SRDEN_CODES check

@@ -121,6 +121,43 @@ class TestPipelineHelpers(unittest.TestCase):
         self.assertEqual(ph.disp_type('PCT'), 'UNI')
         self.assertEqual(ph.disp_type('BCM'), 'BCM')  # untouched type passes through
 
+    def test_disp_type_merges_18nov2026_corrected_aliases(self):
+        # Shruti's SWR_Machine_Details_1.xlsx (18-Nov-2026): every SBCM
+        # machine is sometimes written "FRM", every BRM machine is
+        # sometimes written "PBR", every TLE machine is always written
+        # "SQRS", every PCCM machine is always written "T-28", and WST-01
+        # is the 10th machine listed under the DUO section - none of
+        # these six raw prefixes are real types of their own.
+        self.assertEqual(ph.disp_type('FRM'), 'SBCM')
+        self.assertEqual(ph.disp_type('PBR'), 'BRM')
+        self.assertEqual(ph.disp_type('SQRS'), 'TLE')
+        self.assertEqual(ph.disp_type('T'), 'PCCM')
+        self.assertEqual(ph.disp_type('WST'), 'DUO')
+        # A machine recorded either way must land on the exact same
+        # canonical type:
+        self.assertEqual(ph.disp_type(ph.mtype_of('PBR 04')), ph.disp_type(ph.mtype_of('BRM-04')))
+        self.assertEqual(ph.disp_type(ph.mtype_of('FRM 1889')), ph.disp_type(ph.mtype_of('SBCM 1889')))
+
+    def test_tamping_info_and_full_name_cover_every_display_type(self):
+        # Every code disp_type() can ever RETURN (i.e. every value in
+        # UNI_MERGE, plus every type disp_type() leaves untouched) must
+        # have both a TAMPING_INFO entry and an MTYPE_FULL_NAME entry -
+        # otherwise a machine of that type silently falls back to
+        # ('Non-Tamping', 'Unclassified') and no full name, which is
+        # exactly the 18-Nov-2026 bug this table exists to prevent.
+        display_codes = set(ph.UNI_MERGE.values()) | {
+            'BCM', 'CSM', 'DGS', 'DTE', 'MDU', 'MPT', 'RBMV', 'RGM', 'UTV', 'RMV',
+        }
+        for code in sorted(display_codes):
+            self.assertIn(code, ph.TAMPING_INFO, f"{code} missing from TAMPING_INFO")
+            self.assertIn(code, ph.MTYPE_FULL_NAME, f"{code} missing from MTYPE_FULL_NAME")
+        # None of the raw alias prefixes should be keys any more - keeping
+        # both the raw and canonical key around is exactly what let this
+        # bug happen in the first place (see pipeline_helpers.py's
+        # TAMPING_INFO comment).
+        for raw in ('FRM', 'PBR', 'SQRS', 'T', 'WST', 'PCT'):
+            self.assertNotIn(raw, ph.TAMPING_INFO, f"{raw} should not be its own TAMPING_INFO key any more")
+
     def test_mtype_of_extracts_leading_letters(self):
         self.assertEqual(ph.mtype_of('BCM-351'), 'BCM')
         self.assertEqual(ph.mtype_of('T-28 (403&404)'), 'T')
@@ -241,6 +278,40 @@ class TestSourceAdapters(unittest.TestCase):
             self.assertIn('Machine', rec)
             self.assertIn('AgeYears', rec)
             self.assertTrue(rec['AgeYears'] is None or isinstance(rec['AgeYears'], int))
+
+    def test_extract_home_div_resolves_brm_pbr_alias(self):
+        # Regression test for the 18-Nov-2026 "PBR shown as UNKNOWN
+        # division" bug (Shruti's screenshot): Original Allocation always
+        # names these machines "BRM" (confirmed in her own Div Wise
+        # Machine Original Alloc sheet), but Cumulative Progress
+        # sometimes names the SAME physical machine "PBR" instead. Before
+        # the fix, home_div was keyed by a plain alnum normalization, so
+        # "BRM-04" and "PBR 04" produced two different keys and never
+        # matched - a machine away at IOH/POH (CurrentDIV not
+        # MYS/SBC/UBL) then fell all the way through to HomeDivision =
+        # 'UNKNOWN'. No live fixture needed: this is a synthetic payload
+        # built the same shape swr_machine_details_sync.gs produces.
+        payload = {"originalAllocation": {
+            "mys": ["BCM-351"],
+            "sbc": ["BRM-04", "BRM-56669"],
+            "ubl": ["FRM-1889"],
+        }}
+        home_div, bare_type_div, norm = swr_machine_details.extract_home_div(payload)
+        records = cumulative_progress.extract_cum_progress(
+            {"years": {"2026-2027": {"rows": [
+                {"Machine": "PBR 04", "DIV": "POH", "RowType": "machine"},
+                {"Machine": "FRM 1889", "DIV": "MYS", "RowType": "machine"},
+            ]}}},
+            home_div, bare_type_div, norm)
+        by_machine = {r['Machine']: r for r in records}
+        self.assertEqual(by_machine['PBR 04']['HomeDivision'], 'SBC',
+                          "PBR 04 should resolve to SBC via its BRM-04 Original Allocation entry, not UNKNOWN")
+        self.assertNotEqual(by_machine['PBR 04']['HomeDivision'], 'UNKNOWN')
+        # FRM 1889 is listed in Original Allocation under "ubl" (as
+        # "FRM-1889"), so its HomeDivision is UBL regardless of its
+        # CurrentDIV ("MYS", e.g. on deputation) - home_div always wins
+        # over CurrentDIV when a match is found (see extract_cum_progress).
+        self.assertEqual(by_machine['FRM 1889']['HomeDivision'], 'UBL')
 
     @skip_if_missing(f"{FIXTURE_DIR}/cumulative_progress_latest.json")
     def test_cumulative_progress(self, payload):
