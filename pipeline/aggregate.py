@@ -97,33 +97,15 @@ ZONE_LETTER = {'CENTRAL': 'C', 'EAST': 'E', 'WEST': 'W', 'NORTH': 'N', 'SOUTH': 
 # verbatim from run_pipeline.py's TAMPING_INFO. Do not revert without the
 # user's explicit sign-off again (see run_pipeline.py's own comment for
 # the full history).
-TAMPING_INFO = {
-    'CSM': ('Tamping', 'Continuous Action Tamping Machine (user-confirmed 28-Sep-2026 definitive list)'),
-    'DUO': ('Tamping', 'Duomatic - dual-unit tamping machine (user-confirmed 28-Sep-2026 definitive list)'),
-    'UNI': ('Tamping', 'Unimat / Universal tamping machine (points & crossings + plain track) (user-confirmed 28-Sep-2026 definitive list)'),
-    'PCTM': ('Tamping', 'Points & Crossing Tamping Machine - same family as Unimat, merged with UNI'),
-    'PCT': ('Tamping', 'Points & Crossing Tamping Machine - same family as Unimat, merged with UNI'),
-    'MPT': ('Tamping', 'Multi-Purpose Tamper (user-confirmed 28-Sep-2026 definitive list)'),
-    'DTE': ('Tamping', 'Tamping machine (user-confirmed 28-Sep-2026 definitive list)'),
-    'BCM': ('Non-Tamping', 'Ballast Cleaning Machine (user-corrected 28-Sep-2026, definitive list)'),
-    'FRM': ('Non-Tamping', 'Formation Rehabilitation Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'SRGM': ('Non-Tamping', 'Shoulder Ballast Cleaning/Regulating Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'RGM': ('Non-Tamping', 'Rail Grinding Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'SQRS': ('Non-Tamping', 'Quick Relay System (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'T': ('Non-Tamping', 'T-28 Track machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'PBR': ('Non-Tamping', 'Points/Plain-track Ballast Regulator (user-confirmed 28-Sep-2026 definitive list)'),
-    'MDU': ('Non-Tamping', 'Maintenance / utility unit (user-confirmed 28-Sep-2026 definitive list)'),
-    'RBMV': ('Non-Tamping', 'Rail-Borne Maintenance Vehicle / RBMB (user-confirmed 28-Sep-2026 definitive list)'),
-    'UTV': ('Non-Tamping', 'Utility Track Vehicle (user-confirmed 28-Sep-2026 definitive list)'),
-    'DGS': ('Non-Tamping', 'Dynamic Track Stabilizer (DGS/DTS) (user-confirmed 28-Sep-2026 definitive list)'),
-    'BRM': ('Non-Tamping', 'Ballast Regulating Machine'),
-    'WST': ('Non-Tamping', 'Special track machine (under commissioning)'),
-    'RMV': ('Non-Tamping', 'RMV - maintained by the Track Machine Department but OPERATED by the divisions; '
-                            'unique to SWR (not present on any other railway); the Railway Board issues no '
-                            'progress target against this type, so it never appears in the Cumulative Progress '
-                            'sheet, but it IS part of the SWR fleet (user-confirmed 21-Oct-2026) - added to the '
-                            'fleet roster via RMV_WST_NO_TARGET_FLEET below, with NoProgressTarget=True.'),
-}
+#
+# Fixed 18-Nov-2026 per Shruti's corrected SWR_Machine_Details_1.xlsx:
+# now just an alias for pipeline_helpers.TAMPING_INFO, which is keyed by
+# DISPLAY/canonical type code only (the raw FRM/PBR/SQRS/T/WST/PCT
+# prefixes are merged into their real type via ph.disp_type() before
+# ever reaching this dict -- every .get() against TAMPING_INFO below
+# wraps its key in ph.disp_type(...) first). See pipeline_helpers.py's
+# own TAMPING_INFO/UNI_MERGE comment for the full story.
+TAMPING_INFO = ph.TAMPING_INFO
 
 # RMV/WST "no progress target" fleet additions (user-confirmed 21-Oct-2026)
 # -- copied verbatim from run_pipeline.py. Pure/hardcoded, no filesystem
@@ -582,14 +564,20 @@ def build_base_payload(cum_records, shortfall_records, exception_data, age_profi
         return r['HomeDivision']
 
     div_rollup = rollup(cum_records, div_key)
-    mtype_rollup = rollup(cum_records, lambda r: r['MachineType'])
+    # Fixed 18-Nov-2026: ph.disp_type() merges FRM->SBCM, PBR->BRM,
+    # SQRS->TLE, T->PCCM, WST->DUO (and the pre-existing PCTM/PCT->UNI) so
+    # these phantom raw-prefix "types" never appear as their own bucket
+    # here -- same fix as the v3 mtypeRollup rebuild below; kept here too
+    # since this is the payload's `progress.divRollup`/early machines
+    # shape before that rebuild runs.
+    mtype_rollup = rollup(cum_records, lambda r: ph.disp_type(r['MachineType']))
 
     secondary_cum_records = []
     for r in cum_records:
         sec = r.get('Secondary')
         if sec:
             secondary_cum_records.append({
-                'MachineType': f"{r['MachineType']} ({sec['Unit']})",
+                'MachineType': f"{ph.disp_type(r['MachineType'])} ({sec['Unit']})",
                 'AnnualTarget': sec.get('AnnualTarget'),
                 'ProportionateTarget': sec.get('ProportionateTarget'),
                 'ActualProg': sec.get('ActualProg'),
@@ -608,7 +596,7 @@ def build_base_payload(cum_records, shortfall_records, exception_data, age_profi
     machines_base = []
     for r in cum_records:
         d = r['CurrentDIV'] if r['CurrentDIV'] in ('MYS', 'SBC', 'UBL') else r['HomeDivision']
-        m = dict(type=r['MachineType'], machine=r['Machine'], div=d, status=r['Status'], unit=r['Unit'],
+        m = dict(type=ph.disp_type(r['MachineType']), machine=r['Machine'], div=d, status=r['Status'], unit=r['Unit'],
                   annualTarget=r['AnnualTarget'], targetMonth=r['TargetPerMonth'])
         for abbr in MONTH_ABBR:
             m[abbr.lower()] = r.get(abbr)
@@ -873,7 +861,14 @@ def run(outdir, as_of=None):
     for r in cum_records:
         r = dict(r)
         mt = r.get('MachineType')
-        info = TAMPING_INFO.get(mt, ('Non-Tamping', 'Unclassified'))
+        # Fixed 18-Nov-2026: TAMPING_INFO is keyed by canonical/display
+        # type now (BRM, SBCM, TLE, PCCM, DUO, ...), not the raw sheet
+        # prefix (PBR/FRM/SQRS/T/WST) -- disp_type() first, same as
+        # MachineTypeDisplay just below, so a PBR/FRM/SQRS/T/WST machine
+        # gets its real Tamping classification and full-name note
+        # instead of silently falling to the ('Non-Tamping',
+        # 'Unclassified') default.
+        info = TAMPING_INFO.get(ph.disp_type(mt), ('Non-Tamping', 'Unclassified'))
         r['MachineTypeDisplay'] = ph.disp_type(mt)
         r['TampingCategory'] = info[0]
         r['TampingNote'] = info[1]
@@ -1127,6 +1122,11 @@ def run(outdir, as_of=None):
             unit=r.get('Unit'), annualTarget=r.get('AnnualTarget'), targetMonth=r.get('TargetPerMonth'),
             targetToDate=r.get('ProportionateTarget'), actualToDate=r.get('ActualProg'), pct=r.get('PctProg'),
             tamping=r.get('TampingCategory'), tampingNote=r.get('TampingNote'),
+            # Added 18-Nov-2026 per Shruti: "when we go to any machine
+            # chart, you can write the full form of the machine at the
+            # top" - ph.MTYPE_FULL_NAME is keyed by the same display type
+            # code as `type` above, so this is never out of step with it.
+            typeFullName=ph.MTYPE_FULL_NAME.get(r.get('MachineTypeDisplay') or r.get('MachineType')),
             iohPohStart=r.get('IOHPOH_StartDate'), iohPohExpected=r.get('IOHPOH_ExpectedCompletion'),
             iohPohDays=None, iohPohDaysUnderSrc=r.get('IOHPOH_DaysUnder'), iohPohLocation=r.get('IOHPOH_Location'),
             srden=machine_to_srden.get(ph.norm_machine(r['Machine'])),
@@ -1160,7 +1160,17 @@ def run(outdir, as_of=None):
                 m['iohPohDaysElapsed'] = (datetime.datetime.combine(as_of, datetime.time()) - dt).days
                 exp = ph.parse_ddmmyyyy(m.get('iohPohExpected'))
                 if exp:
-                    m['iohPohTotalSpan'] = (exp - dt).days
+                    # Fixed 18-Nov-2026 per Shruti: "if the number of days
+                    # designated is 105, you are showing it as 104" --
+                    # (exp - dt).days is an EXCLUSIVE day count (just the
+                    # gap between the two dates); TMM/IRTMM's "days
+                    # designated" counts both the start day and the end
+                    # day as whole days under IOH/POH, so it is inclusive
+                    # of both endpoints -- one more than the plain
+                    # subtraction (confirmed against BCM-351: 29-Sep-2026
+                    # to 11-Jan-2027 is 104 days apart, but 105 designated
+                    # days inclusive).
+                    m['iohPohTotalSpan'] = (exp - dt).days + 1
                     m['iohPohDays'] = m['iohPohTotalSpan']  # designated days = target date - start date (TMM/IRTMM)
 
     # ---- Unit Cost enrichment ----
@@ -1252,7 +1262,10 @@ def run(outdir, as_of=None):
             continue
         mt = re.match(r'[A-Za-z]+', r['Machine'].replace(' ', '').replace('-', ''))
         typecode = mt.group(0).upper() if mt else ''
-        tamping = TAMPING_INFO.get(typecode, ('Non-Tamping', ''))[0]
+        # Fixed 18-Nov-2026: disp_type() first (same merge as the `type`
+        # field just below), since TAMPING_INFO no longer has its own
+        # PBR/FRM/SQRS/T/WST entries.
+        tamping = TAMPING_INFO.get(ph.disp_type(typecode), ('Non-Tamping', ''))[0]
         overdue.append(dict(machine=r['Machine'], division=r['Division'], type=ph.disp_type(typecode), tamping=tamping,
                              commission=r['Commission'],
                              overdueIOHMonths=round(nd_ioh, 1) if is_overdue_ioh else None,
@@ -1276,9 +1289,19 @@ def run(outdir, as_of=None):
     p['meta']['iohPohStaleCount'] = len(iohpoh_stale)
 
     # ---- v3: age enrichment + catMachine/catDivMachine drilldowns + merged mtypeRollup ----
-    age_by_machine = {ph.norm_machine(a['Machine']): a for a in age_profile}
+    # Fixed 18-Nov-2026 per Shruti ("the machine details are utilized
+    # elsewhere also, in age profile and all -- you connect it there
+    # also"): this join used to be plain norm_machine(), which only
+    # normalizes whitespace/dashes, not the FRM/SBCM or PBR/BRM type
+    # aliasing -- so a machine listed as "BRM 04" in the Age Profile
+    # sheet but "PBR 04" in Cumulative Progress (or vice versa) silently
+    # never got an age/commissioning-date attached, exactly the same
+    # cross-sheet mismatch as the home_div fix in swr_machine_details.py.
+    # machine_key_aliased() (already proven for the Sr.DEN and Unit Cost
+    # joins) fixes this the same way: both spellings key identically.
+    age_by_machine = {ph.machine_key_aliased(ph.norm_machine(a['Machine'])): a for a in age_profile}
     for m in p['progress']['machines']:
-        a = age_by_machine.get(ph.norm_machine(m['machine']))
+        a = age_by_machine.get(ph.machine_key_aliased(ph.norm_machine(m['machine'])))
         if a:
             m['age'] = a['AgeYears']
             m['ageBucket'] = ('0-10 yrs' if (a['AgeYears'] or 0) <= 10 else
@@ -1320,7 +1343,15 @@ def run(outdir, as_of=None):
         pct = (d['actualToDate'] / d['targetToDate']) if d['targetToDate'] else 0
         new_mtype_rollup.append(dict(type=t, count=d['count'], annualTarget=round(d['annualTarget'], 1),
                                       targetToDate=round(d['targetToDate'], 1), actualToDate=round(d['actualToDate'], 1),
-                                      pct=round(pct, 4)))
+                                      pct=round(pct, 4),
+                                      # Added 18-Nov-2026 per Shruti: "for
+                                      # the group of machines, you also
+                                      # give the proper full form of the
+                                      # machine at the top" - this is the
+                                      # row a machine-type group's own
+                                      # page (e.g. "BCM - Progress vs
+                                      # Target") is built from.
+                                      fullName=ph.MTYPE_FULL_NAME.get(t)))
     by_type_secondary = defaultdict(lambda: dict(count=0, annualTarget=0.0, targetToDate=0.0, actualToDate=0.0, unit=None))
     for m in p['progress']['machines']:
         sec = m.get('secondary')
@@ -1342,6 +1373,13 @@ def run(outdir, as_of=None):
         log(f"mtypeRollup (v3 rebuild): re-attached {len(by_type_secondary)} secondary-unit pseudo-type "
             f"row(s): {', '.join(sorted(by_type_secondary))}")
     p['progress']['mtypeRollup'] = new_mtype_rollup
+    # Added 18-Nov-2026: the full canonical-type-code -> full-name table
+    # itself, exposed generically (same pattern as network_map's own
+    # catMeta/divColor/divName static reference tables) so any other spot
+    # in the template that needs a type's full form can read it straight
+    # off the payload without depending on a specific machine/rollup row
+    # happening to carry it.
+    p['progress']['typeFullNames'] = ph.MTYPE_FULL_NAME
 
     # ---- v4: Sr.DEN fuzzy attach + double-shift roster ----
     # Fixed 14-Nov-2026: lookup_srden() above is built entirely from
@@ -1485,7 +1523,17 @@ def run(outdir, as_of=None):
                 m['iohPohDaysElapsed'] = (datetime.datetime.combine(as_of, datetime.time()) - dt).days
                 exp = ph.parse_ddmmyyyy(m.get('iohPohExpected'))
                 if exp:
-                    m['iohPohTotalSpan'] = (exp - dt).days
+                    # Fixed 18-Nov-2026 per Shruti: "if the number of days
+                    # designated is 105, you are showing it as 104" --
+                    # (exp - dt).days is an EXCLUSIVE day count (just the
+                    # gap between the two dates); TMM/IRTMM's "days
+                    # designated" counts both the start day and the end
+                    # day as whole days under IOH/POH, so it is inclusive
+                    # of both endpoints -- one more than the plain
+                    # subtraction (confirmed against BCM-351: 29-Sep-2026
+                    # to 11-Jan-2027 is 104 days apart, but 105 designated
+                    # days inclusive).
+                    m['iohPohTotalSpan'] = (exp - dt).days + 1
                     m['iohPohDays'] = m['iohPohTotalSpan']
 
     # ---- Fleet Health - IOH/POH Schedule ----

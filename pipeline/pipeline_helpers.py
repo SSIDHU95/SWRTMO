@@ -164,34 +164,105 @@ def mtype_of(name):
     return m.group(0).upper() if m else 'OTHER'
 
 
-UNI_MERGE = {'PCTM': 'UNI', 'PCT': 'UNI'}
+# ---------------------------------------------------------------------------
+# Fixed 18-Nov-2026 per Shruti's corrected "SWR Machine Details" workbook
+# (she supplied it twice; the second, SWR_Machine_Details_1.xlsx, is the
+# authoritative one -- 99 machines across 17 sections, each headed
+# "<CODE>: <Full Name>", with an "Alterative Name" column spelling out
+# exactly which raw name variants are the SAME physical machines).
+#
+# The bug this fixes: several of this dashboard's source sheets (Daily
+# Progress, Cumulative Progress) record some machines under a DIFFERENT
+# raw name prefix than their real canonical type -- confirmed directly
+# against the workbook's own Alternative Name column (every single SBCM
+# machine is also written "FRM <serial>" there, every single BRM machine
+# is also written "PBR <serial>") -- plus two more raw-prefix mismatches
+# found by cross-checking the workbook's Machine Name column against the
+# live site's own type breakdown (every TLE-type machine is always
+# literally named "SQRS ...", never "TLE ..."; every PCCM-type machine is
+# always literally named "T-28 ...", never "PCCM ..."), and one more
+# found in the live Original Allocation list (WST-01 is the 10th machine
+# listed under the DUO section, a Tamping Duomatic unit under
+# commissioning, not a separate type at all). mtype_of() above only ever
+# reads the raw prefix off whatever name a given sheet happened to use, so
+# without this table, FRM/PBR/SQRS/T/WST were being treated as six
+# phantom "types" of their own -- with wrong full names, wrong Tamping
+# classification in WST's case, and (for PBR specifically) a broken
+# division lookup, since the Original Allocation sheet only ever lists
+# these machines as "BRM", never "PBR" -- see swr_machine_details.py's
+# extract_home_div() fix for that part.
+#
+# UNI_MERGE was the one pre-existing example of exactly this pattern
+# (PCTM/PCT raw prefixes merged into the "UNI" display code, user-
+# confirmed 28-Sep-2026) -- extended here with the same mechanism rather
+# than inventing a second one. disp_type() is the one function every
+# downstream rollup/display/grouping already calls to turn a raw prefix
+# into what the dashboard actually shows, so extending this table fixes
+# the overview Fleet Size breakdown, every type-grouped progress/
+# shortfall/YoY view, and the Network Map tab's own type filter all at
+# once, with no further code change needed at any of those call sites.
+# TAMPING_INFO lookups do need one extra disp_type() wrap each, since the
+# raw FRM/PBR/SQRS/T/WST/PCT keys below are deliberately NOT kept as
+# their own entries any more (keeping both the raw and the canonical key
+# around would silently un-fix this the next time someone copies this
+# dict without noticing) -- see each call site's own comment.
+# ---------------------------------------------------------------------------
+UNI_MERGE = {
+    'PCTM': 'UNI', 'PCT': 'UNI',
+    'FRM': 'SBCM', 'PBR': 'BRM', 'SQRS': 'TLE', 'T': 'PCCM', 'WST': 'DUO',
+}
 
 
 def disp_type(t):
     return UNI_MERGE.get(t, t)
 
 
+# Canonical full name per DISPLAY/merged type code (i.e. the code
+# disp_type() actually returns) -- sourced word-for-word from
+# SWR_Machine_Details_1.xlsx's own "<CODE>: <Full Name>" section
+# headers. Used for the "full form" shown at the top of a machine's
+# detail chart and a machine-type group's own page (Shruti's 18-Nov-2026
+# request), and available generically as p['progress']['typeFullNames']
+# in the payload for any other spot that needs it.
+MTYPE_FULL_NAME = {
+    'BCM': 'Ballast Cleaning Machine',
+    'CSM': 'Continuous Action Tamping Machine',
+    'DGS': 'Dynamic Track Stabilizer',
+    'DTE': 'Dynamic Tamping Express',
+    'DUO': 'Duomatic',
+    'SBCM': 'Shoulder Ballast Cleaning Machine',
+    'MDU': 'Muck Disposal Unit',
+    'MPT': 'Multipurpose Tamper',
+    'BRM': 'Ballast Regulating Machine',
+    'PCTM': 'Points and Crossing Tamping Machine',
+    'UNI': 'Unimat / Universal Tamping Machine (points & crossings + plain track; includes the Points and Crossing Tamping Machine, PCTM)',
+    'RBMV': 'Rail Borne Maintenance Vehicle',
+    'RGM': 'Rail Grinding Machine',
+    'TLE': 'Track Laying Equipment',
+    'SRGM': 'Switch Rail Grinding Machine',
+    'PCCM': 'Points and Crossing Changing Machine',
+    'UTV': 'Utility Track Vehicle',
+    'RMV': 'Rail Maintenance Vehicle',
+}
+
 TAMPING_INFO = {
     'CSM': ('Tamping', 'Continuous Action Tamping Machine (user-confirmed 28-Sep-2026 definitive list)'),
-    'DUO': ('Tamping', 'Duomatic - dual-unit tamping machine (user-confirmed 28-Sep-2026 definitive list)'),
+    'DUO': ('Tamping', 'Duomatic - dual-unit tamping machine (user-confirmed 28-Sep-2026 definitive list; includes WST-01, an under-commissioning Duomatic unit, per SWR_Machine_Details_1.xlsx 18-Nov-2026)'),
     'UNI': ('Tamping', 'Unimat / Universal tamping machine (points & crossings + plain track) (user-confirmed 28-Sep-2026 definitive list)'),
     'PCTM': ('Tamping', 'Points & Crossing Tamping Machine - same family as Unimat, merged with UNI'),
-    'PCT': ('Tamping', 'Points & Crossing Tamping Machine - same family as Unimat, merged with UNI'),
     'MPT': ('Tamping', 'Multi-Purpose Tamper (user-confirmed 28-Sep-2026 definitive list)'),
     'DTE': ('Tamping', 'Tamping machine (user-confirmed 28-Sep-2026 definitive list)'),
     'BCM': ('Non-Tamping', 'Ballast Cleaning Machine (user-corrected 28-Sep-2026, definitive list)'),
-    'FRM': ('Non-Tamping', 'Formation Rehabilitation Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'SRGM': ('Non-Tamping', 'Shoulder Ballast Cleaning/Regulating Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
+    'SBCM': ('Non-Tamping', 'Shoulder Ballast Cleaning Machine - sometimes recorded in Daily/Cumulative Progress as "FRM" (same physical machines; corrected per SWR_Machine_Details_1.xlsx, 18-Nov-2026 - previously misclassified as its own "FRM" type, "Formation Rehabilitation Machine")'),
+    'SRGM': ('Non-Tamping', 'Switch Rail Grinding Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping; full name corrected 18-Nov-2026 per SWR_Machine_Details_1.xlsx)'),
     'RGM': ('Non-Tamping', 'Rail Grinding Machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'SQRS': ('Non-Tamping', 'Quick Relay System (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'T': ('Non-Tamping', 'T-28 Track machine (user-corrected 28-Sep-2026, definitive list - was wrongly Tamping)'),
-    'PBR': ('Non-Tamping', 'Points/Plain-track Ballast Regulator (user-confirmed 28-Sep-2026 definitive list)'),
+    'TLE': ('Non-Tamping', 'Track Laying Equipment - always recorded in Daily/Cumulative Progress as "SQRS" (same physical machines; corrected per SWR_Machine_Details_1.xlsx, 18-Nov-2026 - previously misclassified as its own "SQRS" type, "Quick Relay System")'),
+    'PCCM': ('Non-Tamping', 'Points and Crossing Changing Machine - always recorded in Daily/Cumulative Progress as "T-28" (same physical machines; corrected per SWR_Machine_Details_1.xlsx, 18-Nov-2026 - previously misclassified as its own "T" type, "T-28 Track machine")'),
+    'BRM': ('Non-Tamping', 'Ballast Regulating Machine - sometimes recorded in Daily/Cumulative Progress as "PBR" (same physical machines; corrected per SWR_Machine_Details_1.xlsx, 18-Nov-2026 - previously misclassified as its own "PBR" type, "Points/Plain-track Ballast Regulator")'),
     'MDU': ('Non-Tamping', 'Maintenance / utility unit (user-confirmed 28-Sep-2026 definitive list)'),
     'RBMV': ('Non-Tamping', 'Rail-Borne Maintenance Vehicle / RBMB (user-confirmed 28-Sep-2026 definitive list)'),
     'UTV': ('Non-Tamping', 'Utility Track Vehicle (user-confirmed 28-Sep-2026 definitive list)'),
     'DGS': ('Non-Tamping', 'Dynamic Track Stabilizer (DGS/DTS) (user-confirmed 28-Sep-2026 definitive list)'),
-    'BRM': ('Non-Tamping', 'Ballast Regulating Machine'),
-    'WST': ('Non-Tamping', 'Special track machine (under commissioning)'),
     'RMV': ('Non-Tamping', 'RMV - maintained by Track Machine Dept but operated by divisions; unique to SWR; no Railway Board target (user-confirmed 21-Oct-2026).'),
 }
 
