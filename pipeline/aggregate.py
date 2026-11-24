@@ -917,14 +917,31 @@ def run(outdir, as_of=None):
                                               '- corrected.')
         progress_fixed.append(r)
 
+    # Fixed 24-Nov-2026 per Shruti: BRM 33 and SBCM 1889 showed an
+    # ambiguous "IOH/POH" badge (instead of a specific IOH or POH), no
+    # "X of Y days designated" total, and didn't open on click. Root
+    # cause: SBCM and BRM are two of the three machine-type prefixes in
+    # MACHINE_PREFIX_ALIASES that the Exception Sheet/IOH-POH Planning
+    # sheets spell one way (SBCM/BRM/PCTM) while Cumulative Progress
+    # still spells the same physical machines the old way (FRM/PBR/PCT)
+    # -- e.g. "SBCM 1889" here is "FRM-1889" there. This whole block
+    # already had the alias map built (machine_key_aliased, used
+    # correctly for the Type tag at machine_type_display_by_key below)
+    # but every join in THIS block used the plain, non-aliased
+    # machine_key() -- so an SBCM/BRM/PCTM machine's Exception Sheet row
+    # could never find its own Cumulative Progress record, and every
+    # lookup that depends on that match (the IOH/POH day count below,
+    # and the Status/Type reconciliation further down) silently failed
+    # for exactly these three machine types, every time, regardless of
+    # which day's data this is.
     ioh_poh_live = {}
     if latest_ex_day:
         for row in exception_data.get(latest_ex_day, []):
             if row.get('Category') == 'M/c under IOH/POH':
-                ioh_poh_live[ph.machine_key(row['Machine'])] = row
+                ioh_poh_live[ph.machine_key_aliased(row['Machine'])] = row
     for r in progress_fixed:
         if r.get('Status') in ('IOH', 'POH'):
-            hit = ioh_poh_live.get(ph.machine_key(r['Machine']))
+            hit = ioh_poh_live.get(ph.machine_key_aliased(r['Machine']))
             if hit:
                 r['IOHPOH_StartDate'] = hit.get('UnderSince')
                 r['IOHPOH_ExpectedCompletion'] = hit.get('Tentative')
@@ -933,10 +950,10 @@ def run(outdir, as_of=None):
 
     # ---- Status correction pass 2: stale IOH/POH flags ----
     STALE_IOHPOH_WINDOW_DAYS = 60
-    _ioh_poh_by_machine_early = {ph.machine_key(r['Machine']): r for r in ioh_poh_records}
+    _ioh_poh_by_machine_early = {ph.machine_key_aliased(r['Machine']): r for r in ioh_poh_records}
     for r in progress_fixed:
-        if r.get('Status') in ('IOH', 'POH') and ph.machine_key(r['Machine']) not in ioh_poh_live:
-            planning_rec = _ioh_poh_by_machine_early.get(ph.machine_key(r['Machine']))
+        if r.get('Status') in ('IOH', 'POH') and ph.machine_key_aliased(r['Machine']) not in ioh_poh_live:
+            planning_rec = _ioh_poh_by_machine_early.get(ph.machine_key_aliased(r['Machine']))
             if not planning_rec:
                 continue
             key = 'LastPOH_Date' if r['Status'] == 'POH' else 'LastIOH_Date'
@@ -954,9 +971,9 @@ def run(outdir, as_of=None):
         progress_fixed_item = r  # no-op, keeps loop body non-trivial for readability
 
     # ---- IOH/POH reconciled: latest Exception Sheet is authoritative ----
-    ioh_poh_by_machine = {ph.machine_key(r['Machine']): r for r in ioh_poh_records}
-    cp_iohpoh = {ph.machine_key(r['Machine']): r for r in cum_records if r['Status'] in ('IOH', 'POH')}
-    ex_iohpoh = {ph.machine_key(row['Machine']): row for row in exception_data.get(latest_ex_day, [])
+    ioh_poh_by_machine = {ph.machine_key_aliased(r['Machine']): r for r in ioh_poh_records}
+    cp_iohpoh = {ph.machine_key_aliased(r['Machine']): r for r in cum_records if r['Status'] in ('IOH', 'POH')}
+    ex_iohpoh = {ph.machine_key_aliased(row['Machine']): row for row in exception_data.get(latest_ex_day, [])
                  if row.get('Category') == 'M/c under IOH/POH'} if latest_ex_day else {}
     # Added 13-Nov-2026 (mirrors run_pipeline.py's own 13-Nov-2026 addition) so
     # the dashboard's per-machine-type drill-down (openMachineTypeMonthlyDrawer
@@ -986,11 +1003,32 @@ def run(outdir, as_of=None):
         if exr:
             sources = ['Exception Sheet (latest snapshot)'] + (['Cumulative Progress (Status field)'] if cpr else [])
             iohpoh_reconciled.append(dict(
-                Machine=name, Status=(cpr or {}).get('Status') or 'IOH/POH',
+                # Fixed 24-Nov-2026: use exr's own name (e.g. "SBCM 1889"),
+                # not `name`, which now that cpr resolves correctly for
+                # SBCM/BRM/PCTM machines (see ProgressMachine note below)
+                # would otherwise prefer cpr's OLDER alias spelling (e.g.
+                # "FRM-1889") -- that's the right internal join key, but
+                # the wrong thing to show Shruti, who reads this straight
+                # off the Exception Sheet under its current (SBCM/BRM/
+                # PCTM) name.
+                Machine=exr.get('Machine'), Status=(cpr or {}).get('Status') or 'IOH/POH',
                 Division=(cpr or {}).get('CurrentDIV') or exr.get('Division'),
                 StartDate=exr.get('UnderSince'), ExpectedCompletion=exr.get('Tentative'),
                 DaysUnder=exr.get('DaysUnder'), Sources=sources,
                 Type=machine_type_display_by_key.get(k),
+                # Added 24-Nov-2026 (same BRM/SBCM/PCTM alias fix as
+                # above): the frontend's own machine lookup in
+                # openIohPohDrawer() only tried an exact-name/space-to-
+                # hyphen match against progress.machines, which can never
+                # bridge "SBCM 1889" (Exception Sheet spelling) to
+                # "FRM-1889" (Cumulative Progress spelling, where
+                # iohPohDays/iohPohDaysElapsed actually live) -- or any
+                # other SBCM/BRM/PCTM machine. cpr['Machine'] is already
+                # the correctly-aliased-matched Cumulative Progress
+                # record's own name when one was found, so handing it
+                # over directly lets the frontend match exactly, with no
+                # alias logic of its own needed.
+                ProgressMachine=(cpr or {}).get('Machine'),
             ))
             continue
         planning_rec = ioh_poh_by_machine.get(k)
