@@ -1385,6 +1385,23 @@ svg.leaflet-image-layer.leaflet-interactive path {
   tr.lds-total-row td{color:var(--text);}
   td.lds-divsplit,th.lds-divsplit{border-left:2px solid var(--border);}
 
+  /* ===== Reason-for-Shortfall tab -- "Machine-wise Shortfall & Availability"
+     cards (added 25-Nov-2026), built from DATA.rawSources.shortfallReasonsRaw.
+     Reuses .dstat-row/.dstat, .yoy-row/.yoy-num, .srden-picker/.msgbox (all
+     pre-existing, same tokens) -- these few classes are the only new ones. ----- */
+  .sfraw-barrow{display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); cursor:pointer;}
+  .sfraw-barrow:last-child{border-bottom:none;}
+  .sfraw-barrow:hover{background:var(--surface-2);}
+  .sfraw-bl{width:150px; flex:none; font-size:12px; font-weight:650; color:var(--text);}
+  .sfraw-bwrap{flex:1; display:flex; height:20px; border-radius:5px; overflow:hidden; background:var(--surface-2);}
+  .sfraw-seg{height:100%;}
+  .sfraw-bn{width:110px; flex:none; text-align:right; font-family:var(--mono); font-size:11.5px; color:var(--muted);}
+  .sfraw-legend{display:flex; flex-wrap:wrap; gap:10px 16px; margin:10px 0 16px; font-size:11px; color:var(--muted);}
+  .sfraw-sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+  .sfraw-remark{background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:11px 13px; margin-bottom:12px; font-size:12px; line-height:1.5;}
+  .sfraw-remark-l{font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); font-weight:700; margin-bottom:4px;}
+  .sfraw-remark-v{color:var(--text);}
+
 </style>
 <style>
 /* =====================================================================
@@ -1597,6 +1614,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="card"><h3>Category Breakdown</h3><div class="cap">Click a bar for the machines behind that reason</div><div class="chartwrap" style="height:360px"><div id="sfCatChart" class="svgchart"></div></div></div>
         <div class="card"><h3>Month-wise Trend (top 6 reasons)</h3><div class="chartwrap" style="height:360px"><div id="sfTrendChart" class="svgchart"></div></div></div>
       </div>
+    </div>
+
+    <!-- ============ NEW 25-Nov-2026: Machine-wise Shortfall & Availability.
+         Built from the separate "Shortfall Reasons" Google Sheet (division
+         availability, FY-to-date down-days per machine, fleet utilisation) --
+         already live via the existing Apps Script sync (same raw feed shown
+         generically on the Live Sources tab as "Fleet Availability &
+         Utilisation"). Kept visually and structurally apart from the three
+         cards above (Daily-Progress Remarks-column shortfall-category log),
+         per Shruti's explicit instruction not to connect/merge the two --
+         different source sheet, different category taxonomy. Signed off from
+         a private preview: https://claude.ai/artifact/TLjys5ZAZFzAdvdK5MPNt8
+         ============ -->
+    <div class="card" style="border-top:3px solid var(--steel,#4F46E5);">
+      <div class="cardhead"><div><h3>Machine-wise Shortfall &amp; Availability</h3><div class="cap">From the separate &ldquo;Shortfall Reasons&rdquo; Google Sheet &mdash; division-wise availability, FY-to-date down-days per machine, and fleet utilisation &bull; data as of <span id="sfRawAsOf">&mdash;</span></div></div></div>
+    </div>
+    <div class="card" id="srdenBanner-shortfallRaw"></div>
+    <div class="card">
+      <div class="cardhead"><div><h3>Availability by Division</h3><div class="cap">Click a division for its machines &bull; &ldquo;Construction Line&rdquo; = machines on new-line construction ahead of commissioning</div></div></div>
+      <div class="yoy-row" id="sfAvailRow"></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><div><h3>Machine-wise Shortfall Breakdown</h3><div class="cap">Pick a machine type for its own down-day reason breakdown, with that type's utilisation figures shown alongside &bull; click a bar (or a machine card) for its full detail</div></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 12px;">
+        <select id="sfRawTypePicker" style="font-family:var(--sans);font-size:12.5px;padding:7px 11px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);flex:1;min-width:200px;"></select>
+        <select id="sfRawReasonGroup" style="font-family:var(--sans);font-size:12.5px;padding:7px 11px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
+          <option value="tmo">Machine-side reasons (IOH/POH, repair, maintenance...)</option>
+          <option value="div">Division-side reasons (block not given, bad weather...)</option>
+        </select>
+      </div>
+      <div class="dstat-row" id="sfRawTypeStats"></div>
+      <div class="sfraw-remark" id="sfRawTypeRemark" style="display:none;"></div>
+      <div class="sfraw-legend" id="sfRawChartLegend"></div>
+      <div id="sfRawTypeChart"></div>
     </div>
   </section>
 
@@ -4570,6 +4621,403 @@ function openMachineTypeMonthlyDrawer(type){
   }));
 }
 
+// =====================================================================
+// Reason-for-Shortfall tab -- "Machine-wise Shortfall & Availability"
+// (added 25-Nov-2026 per Shruti's signed-off preview:
+// https://claude.ai/artifact/TLjys5ZAZFzAdvdK5MPNt8). Built entirely from
+// DATA.rawSources.shortfallReasonsRaw -- the SAME raw sync already live and
+// shown generically on the Live Sources tab ("Fleet Availability &
+// Utilisation" card) -- no new Apps Script / Supabase table needed. Kept
+// deliberately separate from DATA.shortfall (the Daily-Progress Remarks-
+// column shortfall-category log the three cards above already cover) per
+// Shruti's explicit instruction not to connect/merge the two: different
+// source sheet, different category taxonomy.
+//
+// The sheet's own "X Total"/"X Summary" rows already carry the type
+// ("group") and rowType server-side (the Apps Script sync did that part),
+// so -- unlike the private-preview prototype, which had to re-derive type
+// from scratch against a downloaded Excel file -- this only needs to:
+//  (a) forward-fill + sum each machine's continuation rows (a multi-
+//      division machine's stint is split across several rows here, exactly
+//      as it is in the source sheet -- e.g. "T28 03 & 04" is 3 rows: one
+//      named + 2 unnamed continuations, each a different division's days),
+//  (b) recompute the two down-day percentages the same verified way as
+//      every other rollup in this file, and
+//  (c) resolve each machine's Sr.DEN jurisdiction by matching its name
+//      against the real DATA.progress.machines roster (division alone
+//      isn't fine-grained enough -- jurisdictions are things like "UBL
+//      Sr.DEN/W" vs "UBL Sr.DEN/C", not just "UBL") -- same multi-tier
+//      alias/digit-run matching proven by hand against this exact sheet
+//      during the preview (83/87 machines matched; the handful that don't
+//      are shown plainly as unmatched, never silently dropped or guessed).
+// =====================================================================
+const SFRAW_TMO_CATS = [['iohPoh','IOH/POH','#7C3AED','IOH/ POH'], ['underRepair','Under Repair','#E11D48','Under Repair'], ['schMaint','Sch. Maintenance','#0D9488','Sch. Maintenance'], ['staffAccount','Staff account','#D97706','M/c Staff account'], ['shiftChange','Shift change','#64748B','Shift change']];
+const SFRAW_DIV_CATS = [['blockNotGiven','Block not given','#E11D48','Block not given'], ['blockNotPlanned','Block not planned','#D97706','Block Not Planned'], ['badWeather','Bad weather','#0284C7','Bad weather'], ['mcShifting','Machine shifting','#7C3AED','M/c Shifting'], ['depotWork','Depot work','#0D9488','Depot work'], ['txrExam','TXR Examination','#64748B','TXR Examination'], ['others','Others','#94A3B8','Others']];
+const SFRAW_CATS_ALL = SFRAW_TMO_CATS.concat(SFRAW_DIV_CATS);
+
+// ---- name matching against DATA.progress.machines (srden resolution only --
+// type comes straight from the sheet's own 'group' field, never from here) ----
+const SFRAW_ALIASES = {SBCM:'FRM', BRM:'PBR', PCTM:'PCT', PQRS:'SQRS'};
+function sfrawStripParen(s){ return String(s||'').replace(/\([^)]*\)/g,''); }
+function sfrawNorm(s){ return sfrawStripParen(s).toUpperCase().replace(/&/g,' AND ').replace(/[^A-Z0-9]+/g,''); }
+function sfrawDezero(s){ return s.replace(/(?<![0-9])0+(?=[0-9])/g,''); }
+function sfrawAliasPrefix(s){
+  for (const pref in SFRAW_ALIASES){ if (s.indexOf(pref)===0) return SFRAW_ALIASES[pref] + s.slice(pref.length); }
+  return s;
+}
+function sfrawCandidateKeys(raw){
+  const n = sfrawNorm(raw);
+  return Array.from(new Set([n, sfrawDezero(n), sfrawAliasPrefix(n), sfrawDezero(sfrawAliasPrefix(n))]));
+}
+function sfrawPrefixOf(key){ const m = key.match(/^([A-Z]+)/); return m ? m[1] : key; }
+function sfrawLastDigitRun(name){ const runs = (String(name||'').match(/\d+/g)||[]); return runs.length ? runs[runs.length-1].replace(/^0+(?=\d)/,'') : ''; }
+
+let _sfrawProgIndex = null, _sfrawProgPrefixCount = null;
+function sfrawEnsureProgIndex(){
+  if (_sfrawProgIndex) return;
+  _sfrawProgIndex = {}; _sfrawProgPrefixCount = {};
+  (DATA.progress.machines||[]).forEach(pm=>{
+    sfrawCandidateKeys(pm.machine).forEach(k=>{ (_sfrawProgIndex[k]=_sfrawProgIndex[k]||[]).push(pm); });
+    const pre = sfrawPrefixOf(sfrawNorm(pm.machine));
+    (_sfrawProgPrefixCount[pre]=_sfrawProgPrefixCount[pre]||[]).push(pm);
+  });
+}
+// Multi-tier, same order/logic proven by hand against this sheet during the
+// preview: (1) exact/aliased/leading-zero-insensitive key match; (2) bare
+// digit-less name ("RGM", "SRGM") only when exactly one live machine shares
+// that prefix; (3) trailing-digit-run EXACT equality only when unique within
+// that prefix (never substring/endswith -- that wrongly collided "RBMV 005"
+// against live "RBMV-205" just because both end in "5"). Ambiguous cases
+// (e.g. both "T-28" machines collapse to the same bare key once a machine
+// name's parenthetical suffix is involved) are deliberately left unmatched
+// rather than guessed -- same policy as everywhere else in this pipeline.
+function sfrawMatchProgress(name){
+  sfrawEnsureProgIndex();
+  for (const k of sfrawCandidateKeys(name)){
+    if (_sfrawProgIndex[k] && _sfrawProgIndex[k].length===1) return _sfrawProgIndex[k][0];
+    if (_sfrawProgIndex[k] && _sfrawProgIndex[k].length>1) return null; // ambiguous key -- don't guess
+  }
+  const pre = sfrawPrefixOf(sfrawAliasPrefix(sfrawNorm(name)));
+  const digits = (String(name||'').match(/\d+/g)||[]);
+  const sameprefix = _sfrawProgPrefixCount[pre]||[];
+  if (!digits.length && sameprefix.length===1) return sameprefix[0];
+  if (digits.length){
+    const last = digits[digits.length-1].replace(/^0+(?=\d)/,'');
+    const cands = sameprefix.filter(pm=> last && sfrawLastDigitRun(pm.machine)===last);
+    if (cands.length===1) return cands[0];
+  }
+  return null;
+}
+
+function sfrawNum(v){ return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+
+// Forward-fill + sum a side's raw rows (tamping or non-tamping) into one
+// entry per physical machine, exactly mirroring the sheet's own merged-cell
+// layout: a named row starts a machine, any immediately-following unnamed
+// "machine" rows are that SAME machine's other division stints during the
+// period (summed in, not averaged or overwritten), and a "total" row closes
+// the currently-open machine without contributing data of its own.
+function sfrawBuildEntities(rows){
+  const entities = []; let cur = null;
+  (rows||[]).forEach(row=>{
+    if (row.rowType === 'total'){ cur = null; return; }
+    if (row.rowType !== 'machine') return;
+    // The sheet's own header wording for this column drifts slightly between
+    // monthly update blocks (confirmed 25-Nov-2026: the newest block uses
+    // "Machine No.", the previous one uses "Machine Type & No.") -- try every
+    // spelling seen so far rather than hardcoding just one.
+    const nm = row['Machine Type & No.'] || row['Machine No.'] || row['Machine Type and No.'];
+    if (nm){
+      cur = {name:String(nm).trim(), type: row.group || 'UNKNOWN', divisions: [],
+        mcAvailableDays:0, divDownDays:0, totalDays:0, totalDownDays:0};
+      SFRAW_CATS_ALL.forEach(c=>{ cur[c[0]] = 0; });
+      entities.push(cur);
+    }
+    if (!cur) return; // stray continuation row with nothing open yet -- shouldn't happen, skip defensively
+    if (row.Div) cur.divisions.push(String(row.Div).trim());
+    cur.mcAvailableDays += sfrawNum(row['M/c made available']);
+    cur.divDownDays += sfrawNum(row['Div down days']);
+    cur.totalDays += sfrawNum(row['Total days']);
+    SFRAW_CATS_ALL.forEach(c=>{ cur[c[0]] += sfrawNum(row[c[3]]); });
+    cur.totalDownDays = SFRAW_CATS_ALL.reduce((s,c)=>s+cur[c[0]], 0);
+  });
+  entities.forEach(e=>{
+    e.divisions = Array.from(new Set(e.divisions));
+    // Two distinct, NESTED percentages, hand-verified against the sheet's own
+    // given values (e.g. "CSM 945": mcAvailableDays=202, divDownDays=7 ->
+    // (202-7)/202=96.53%, exactly the sheet's own figure):
+    //  - % Availability = mcAvailableDays / totalDays -- is the machine itself
+    //    mechanically/staff-wise fit (totalDays minus only the 5 machine-side
+    //    (TMO) reasons).
+    //  - % Utilisation = (mcAvailableDays - divDownDays) / mcAvailableDays --
+    //    of the days it WAS fit, how much further got lost to the 7 block/
+    //    division-side reasons. Conditional on availability, not a flat
+    //    fraction of totalDays -- kept separate from % Availability on
+    //    purpose, same as every other rollup in this pipeline.
+    e.pctMachineAvailability = e.totalDays ? Math.round(1000*e.mcAvailableDays/e.totalDays)/10 : null;
+    e.pctUtilisation = e.mcAvailableDays ? Math.round(1000*(e.mcAvailableDays-e.divDownDays)/e.mcAvailableDays)/10 : null;
+  });
+  return entities;
+}
+
+let SFRAW = null;
+function sfrawBuildData(){
+  const sr = (DATA.rawSources||{}).shortfallReasonsRaw;
+  if (!sr) return null;
+  const mws = sr.machineWiseShortfall || {};
+  const entities = sfrawBuildEntities((mws.tamping||{}).rows).concat(sfrawBuildEntities((mws.nonTamping||{}).rows));
+  const unmatched = [];
+  entities.forEach(e=>{
+    const pm = sfrawMatchProgress(e.name);
+    if (pm){ e.matchedMachine = pm.machine; e.srden = pm.srden || null; e.div = pm.div || (e.divisions[0]||null); }
+    else { e.matchedMachine = null; e.srden = null; e.div = e.divisions[0]||null; unmatched.push(e.name); }
+  });
+
+  const typeMap = {};
+  entities.forEach(e=>{
+    const t = e.type || 'UNKNOWN';
+    const tr = typeMap[t] = typeMap[t] || {type:t, machineCount:0, mcAvailableDays:0, divDownDays:0, totalDays:0, totalDownDays:0};
+    SFRAW_CATS_ALL.forEach(c=>{ tr[c[0]] = (tr[c[0]]||0) + e[c[0]]; });
+    tr.machineCount++; tr.mcAvailableDays += e.mcAvailableDays; tr.divDownDays += e.divDownDays; tr.totalDays += e.totalDays; tr.totalDownDays += e.totalDownDays;
+  });
+  Object.values(typeMap).forEach(tr=>{
+    tr.pctMachineAvailability = tr.totalDays ? Math.round(1000*tr.mcAvailableDays/tr.totalDays)/10 : null;
+    tr.pctUtilisation = tr.mcAvailableDays ? Math.round(1000*(tr.mcAvailableDays-tr.divDownDays)/tr.mcAvailableDays)/10 : null;
+  });
+  const typeRollup = Object.values(typeMap).sort((a,b)=>(a.pctUtilisation??999)-(b.pctUtilisation??999));
+
+  const srdenMap = {};
+  entities.forEach(e=>{
+    if (!e.srden) return;
+    const s2 = srdenMap[e.srden] = srdenMap[e.srden] || {srden:e.srden, machineCount:0, machines:[], mcAvailableDays:0, divDownDays:0, totalDays:0, totalDownDays:0};
+    SFRAW_CATS_ALL.forEach(c=>{ s2[c[0]] = (s2[c[0]]||0) + e[c[0]]; });
+    s2.machineCount++; s2.mcAvailableDays += e.mcAvailableDays; s2.divDownDays += e.divDownDays; s2.totalDays += e.totalDays; s2.totalDownDays += e.totalDownDays;
+    s2.machines.push(e);
+  });
+  Object.values(srdenMap).forEach(s2=>{
+    s2.pctMachineAvailability = s2.totalDays ? Math.round(1000*s2.mcAvailableDays/s2.totalDays)/10 : null;
+    s2.pctUtilisation = s2.mcAvailableDays ? Math.round(1000*(s2.mcAvailableDays-s2.divDownDays)/s2.mcAvailableDays)/10 : null;
+    s2.machines.sort((a,b)=>(a.pctUtilisation??999)-(b.pctUtilisation??999));
+  });
+  const srdenRollup = Object.values(srdenMap).sort((a,b)=>(a.pctUtilisation??999)-(b.pctUtilisation??999));
+
+  const avRows = ((sr.divisionAvailability||{}).rows||[]).map(r=>({
+    division: r.DIVISION, totalMachineDays: r['Total Machine days'], totalWorkedDays: r['Total Machine Worked days'],
+    pctWorked: r['% Machine Worked'], pctAvailability: r['% Availability of Machine']
+  }));
+  const avTotal = (sr.divisionAvailability||{}).total;
+  if (avTotal) avRows.push({division:'Total', totalMachineDays:avTotal['Total Machine days'], totalWorkedDays:avTotal['Total Machine Worked days'], pctWorked:avTotal['% Machine Worked'], pctAvailability:avTotal['% Availability of Machine']});
+
+  // Utilisation -- prefer whichever month-tab actually has rows (Oct right
+  // now; Sept is still blank on this sheet) rather than a frozen month name,
+  // per Shruti: "it will be updated subsequently".
+  const fuOct = sr.fleetUtilizationOct || {rows:[]}, fuSept = sr.fleetUtilizationSept || {rows:[]};
+  const fu = (fuOct.rows||[]).length ? fuOct : fuSept;
+  const utilRows = (fu.rows||[])
+    .filter(r=> String(r['Rly.']||'').trim().toUpperCase() !== 'TOTAL')
+    .map(r=>({
+      type: r['Rly.'], machineCount: r['No. of MC'], machineMonths: r['Machine Month'],
+      targetOutput: r['Total Progress as per Rated Output*'], achievedOutput: r['Progress in KM/UNIT/NOs'],
+      pctUtilization: r['% Utilization'], remark: (r.Shortfall||'').trim()
+    }));
+
+  return {
+    asOf: (sr.divisionAvailability||{}).period || '',
+    machineShortfall: entities, typeRollup, srdenRollup,
+    availability: {rows: avRows}, utilisation: {rows: utilRows},
+    matchStats: {matched: entities.length - unmatched.length, total: entities.length, unmatched}
+  };
+}
+
+function sfrawPctCls(p){ if (p==null) return ''; return p>=90?'good':(p>=75?'warn':'bad'); }
+function sfrawPctColor(p){ if (p==null) return 'var(--faint)'; return p>=90?'var(--good)':(p>=75?'var(--warn)':'var(--bad)'); }
+function sfrawFindUtilRow(type){
+  const norm = s=>String(s||'').toUpperCase().replace(/[-\s]/g,'');
+  const nt = norm(type);
+  return (SFRAW.utilisation.rows||[]).find(r=>norm(r.type)===nt) || null;
+}
+function sfrawFindSrden(key){ return SFRAW.srdenRollup.find(r=>r.srden===key); }
+
+function sfrawEntityDetailHtml(e){
+  return statRow([
+    {l:'% Availability', v:(e.pctMachineAvailability??'—')+'%', cls:sfrawPctCls(e.pctMachineAvailability)},
+    {l:'% Utilisation', v:(e.pctUtilisation??'—')+'%', cls:sfrawPctCls(e.pctUtilisation)},
+    {l:'Total down days', v:Math.round(e.totalDownDays)},
+  ]) + `<div class="dcap" style="margin:10px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Machine-side reasons</div>` +
+  SFRAW_TMO_CATS.map(c=>`<div class="drawer-row"><div class="t1">${esc(c[1])}</div><div class="t2">${Math.round(e[c[0]]||0)} days</div></div>`).join('') +
+  `<div class="dcap" style="margin:10px 0 4px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Division-side reasons</div>` +
+  SFRAW_DIV_CATS.map(c=>`<div class="drawer-row"><div class="t1">${esc(c[1])}</div><div class="t2">${Math.round(e[c[0]]||0)} days</div></div>`).join('');
+}
+// "Connecting data": when this shortfall-sheet entity matched a real machine
+// on the Progress vs Target roster, clicking it opens that machine's full
+// cross-tab detail drawer (the SAME one used everywhere else on the site) --
+// not a dead end. The handful that don't match yet fall back to their own
+// figures only, clearly labelled as unmatched.
+function sfrawMachineRowHtml(e){
+  const id = 'sfm'+Math.random().toString(36).slice(2,9);
+  setTimeout(()=>{ const el=document.getElementById(id); if (el) el.addEventListener('click', ()=>{
+    if (e.matchedMachine) openMachineDetailDrawer(e.matchedMachine);
+    else openDrawer(e.name, `${esc(e.type||'Unknown type')} &bull; not yet matched to a Progress vs Target machine by name`, sfrawEntityDetailHtml(e));
+  }); }, 0);
+  return `<div class="dmachine-card" id="${id}" style="cursor:pointer;">
+    <div class="dmtop"><span class="dmname">${esc(e.matchedMachine||e.name)}</span><span class="dbadge accent">${esc(e.type||'—')}</span></div>
+    <div class="dmmeta">${esc((e.divisions||[]).join(', ')||e.div||'—')} &bull; ${e.pctUtilisation!=null?e.pctUtilisation+'% utilised':'—'} &bull; ${Math.round(e.totalDownDays)} down days${e.matchedMachine?'':' &bull; <span style="color:var(--warn)">name not yet matched</span>'}</div>
+  </div>`;
+}
+
+function sfrawBuildSrdenMessage(key){
+  const r = sfrawFindSrden(key);
+  if (!r) return '';
+  const worst = r.machines.slice(0,5);
+  let lines = [];
+  lines.push(`*Machine Shortfall Update (Shortfall Reasons sheet) — ${key}*`);
+  lines.push(`(cumulative, ${SFRAW.asOf||''})`);
+  lines.push('');
+  lines.push(`Machines: ${r.machineCount} | Utilisation: ${r.pctUtilisation}% | Availability: ${r.pctMachineAvailability}%`);
+  lines.push(`Down days — IOH/POH: ${Math.round(r.iohPoh)}, Under Repair: ${Math.round(r.underRepair)}, Sch. Maintenance: ${Math.round(r.schMaint)}, Block not given: ${Math.round(r.blockNotGiven)}, Bad weather: ${Math.round(r.badWeather)}`);
+  lines.push('');
+  lines.push('Lowest-utilised machines here:');
+  worst.forEach(e=>{
+    lines.push(`• ${e.matchedMachine||e.name} (${e.type}) — ${e.pctUtilisation}% utilised, ${Math.round(e.totalDownDays)} down days (IOH/POH ${Math.round(e.iohPoh)}, repair ${Math.round(e.underRepair)}, maint. ${Math.round(e.schMaint)})`);
+  });
+  if (SFRAW.matchStats.unmatched.length){
+    lines.push('');
+    lines.push(`(Note: ${SFRAW.matchStats.unmatched.length} machine(s) in this sheet couldn't be matched to a jurisdiction by name and aren't included above: ${SFRAW.matchStats.unmatched.join(', ')}.)`);
+  }
+  return lines.join('\n');
+}
+function sfrawOpenSrdenDrawer(key){
+  const r = sfrawFindSrden(key);
+  if (!r) return;
+  openDrawer(key, `${r.machineCount} machines &bull; ${r.pctUtilisation}% utilised &bull; ${r.pctMachineAvailability}% available (Shortfall Reasons sheet) &bull; click any machine for full detail`,
+    r.machines.map(sfrawMachineRowHtml).join(''));
+}
+function sfrawDrawSrdenBanner(){
+  renderSrdenBannerInto('shortfallRaw', {
+    heading: 'Sr.DEN Alert &mdash; Machine Shortfall &amp; Down Days',
+    cap: 'Auto-drafted per jurisdiction from the Machine-wise Shortfall sheet (FY-to-date, cumulative) &bull; pick a jurisdiction below',
+    keysFn: ()=> SFRAW.srdenRollup.map(r=>r.srden).sort(),
+    rankFn: k=>{ const r = sfrawFindSrden(k); return r ? (100-r.pctUtilisation) : 0; },
+    countFn: k=>{ const r = sfrawFindSrden(k); return r ? r.machineCount : 0; },
+    countLabel: 'machines',
+    messageFn: sfrawBuildSrdenMessage,
+    openFn: sfrawOpenSrdenDrawer,
+  });
+}
+
+function sfrawRenderAvailability(){
+  const host = document.getElementById('sfAvailRow');
+  if (!host) return;
+  host.innerHTML = SFRAW.availability.rows.map((r,i)=>{
+    const label = r.division==='CN Line' ? 'Construction Line' : (r.division==='Total' ? 'Fleet Total' : r.division);
+    return `<div class="yoy-num" data-i="${i}" style="cursor:pointer;"><div class="v" style="color:${sfrawPctColor(r.pctAvailability)}">${r.pctAvailability}%</div><div class="l">${esc(label)}</div></div>`;
+  }).join('<div style="width:1px;background:var(--border);align-self:stretch;"></div>');
+  Array.from(host.querySelectorAll('.yoy-num')).forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const r = SFRAW.availability.rows[+el.dataset.i];
+      const rows = r.division==='Total' ? SFRAW.machineShortfall : SFRAW.machineShortfall.filter(e=>(e.div===r.division) || (e.divisions||[]).includes(r.division));
+      const sorted = [...rows].sort((a,b)=>(a.pctUtilisation??999)-(b.pctUtilisation??999));
+      openDrawer(r.division==='CN Line'?'Construction Line':r.division, `${r.pctAvailability}% availability &bull; ${sorted.length} machine(s) &bull; click any machine for full detail`,
+        sorted.map(sfrawMachineRowHtml).join('') || '<div class="emptynote">No machine-level rows matched to this division.</div>');
+    });
+  });
+}
+
+function sfrawRenderTypeStats(){
+  const type = document.getElementById('sfRawTypePicker').value;
+  const box = document.getElementById('sfRawTypeStats');
+  const remarkBox = document.getElementById('sfRawTypeRemark');
+  const t = type ? SFRAW.typeRollup.find(r=>r.type===type) : null;
+  if (!t){ box.innerHTML=''; remarkBox.style.display='none'; return; }
+  const u = sfrawFindUtilRow(type);
+  let items = [
+    {l:'Machines', v:t.machineCount},
+    {l:'% Availability', v:(t.pctMachineAvailability??'—')+'%', cls:sfrawPctCls(t.pctMachineAvailability)},
+    {l:'% Utilisation', v:(t.pctUtilisation??'—')+'%', cls:sfrawPctCls(t.pctUtilisation)},
+    {l:'Total down days', v:Math.round(t.totalDownDays)},
+  ];
+  if (u){
+    const upct = u.pctUtilization!=null ? Math.round(u.pctUtilization*1000)/10 : null;
+    items.push({l:'Machine-months', v: u.machineMonths!=null?u.machineMonths:'—'});
+    items.push({l:'Target (rated output)', v: u.targetOutput!=null?u.targetOutput.toLocaleString():'—'});
+    items.push({l:'Achieved', v: u.achievedOutput!=null?u.achievedOutput.toLocaleString():'—'});
+    items.push({l:'% Utilization (output)', v:(upct??'—')+'%', cls:sfrawPctCls(upct)});
+  }
+  box.innerHTML = statRow(items);
+  if (u && u.remark){
+    remarkBox.style.display='block';
+    remarkBox.innerHTML = `<div class="sfraw-remark-l">Shortfall remark</div><div class="sfraw-remark-v">${esc(u.remark)}</div>`;
+  } else {
+    remarkBox.style.display='none';
+  }
+}
+
+function sfrawRenderTypeChart(){
+  const typeSel = document.getElementById('sfRawTypePicker');
+  const type = typeSel.value;
+  const group = document.getElementById('sfRawReasonGroup').value;
+  const cats = group==='tmo' ? SFRAW_TMO_CATS : SFRAW_DIV_CATS;
+  document.getElementById('sfRawChartLegend').innerHTML = cats.map(c=>`<span><span class="sfraw-sw" style="background:${c[2]}"></span>${esc(c[1])}</span>`).join('');
+  let rows, getCats, onClickRow;
+  if (type){
+    rows = SFRAW.machineShortfall.filter(e=>(e.type||'UNKNOWN')===type).sort((a,b)=>(b.totalDownDays||0)-(a.totalDownDays||0));
+    getCats = e=> cats.map(c=>e[c[0]]||0);
+    onClickRow = i=>{ const e = rows[i]; if (e.matchedMachine) openMachineDetailDrawer(e.matchedMachine); else openDrawer(e.name, `${esc(e.type||'Unknown type')} &bull; not matched by name`, sfrawEntityDetailHtml(e)); };
+  } else {
+    rows = [...SFRAW.typeRollup].sort((a,b)=>(b.totalDownDays||0)-(a.totalDownDays||0));
+    getCats = t=> cats.map(c=>t[c[0]]||0);
+    onClickRow = i=>{ typeSel.value = rows[i].type; sfrawRenderTypeStats(); sfrawRenderTypeChart(); };
+  }
+  const maxTotal = Math.max(1, ...rows.map(r=>getCats(r).reduce((s,v)=>s+v,0)));
+  const chart = document.getElementById('sfRawTypeChart');
+  chart.innerHTML = rows.map((r,i)=>{
+    const vals = getCats(r);
+    const total = vals.reduce((s,v)=>s+v,0);
+    const segs = vals.map((v,ci)=> v>0 ? `<div class="sfraw-seg" style="width:${(v/maxTotal*100).toFixed(2)}%;background:${cats[ci][2]}" title="${esc(cats[ci][1])}: ${Math.round(v)}"></div>` : '').join('');
+    const label = type ? (r.matchedMachine||r.name) : r.type;
+    return `<div class="sfraw-barrow" data-i="${i}"><div class="sfraw-bl">${esc(label)}</div><div class="sfraw-bwrap">${segs}</div><div class="sfraw-bn">${Math.round(total)} days</div></div>`;
+  }).join('') || '<div class="emptynote">No data</div>';
+  Array.from(chart.querySelectorAll('.sfraw-barrow')).forEach(el=>{
+    el.addEventListener('click', ()=> onClickRow(+el.dataset.i));
+  });
+}
+
+function sfrawSetupTypePicker(){
+  const sel = document.getElementById('sfRawTypePicker');
+  if (!sel || sel.dataset.wired) return;
+  sel.dataset.wired = '1';
+  const allOpt = document.createElement('option'); allOpt.value=''; allOpt.textContent='All machine types'; sel.appendChild(allOpt);
+  [...SFRAW.typeRollup].sort((a,b)=>a.type.localeCompare(b.type)).forEach(t=>{
+    const o = document.createElement('option'); o.value=t.type; o.textContent=`${t.type} (${t.machineCount})`; sel.appendChild(o);
+  });
+  sel.addEventListener('change', ()=>{ sfrawRenderTypeStats(); sfrawRenderTypeChart(); });
+  const grp = document.getElementById('sfRawReasonGroup');
+  if (grp) grp.addEventListener('change', sfrawRenderTypeChart);
+}
+
+function drawShortfallRawCards(){
+  SFRAW = sfrawBuildData();
+  const asOfEl = document.getElementById('sfRawAsOf');
+  const bannerHost = document.getElementById('srdenBanner-shortfallRaw');
+  if (!SFRAW){
+    // Defensive only -- confirmed live on this deployment already; this path
+    // is here purely so a future deployment without this sync yet degrades
+    // gracefully instead of throwing, same convention as the Live Sources tab.
+    if (asOfEl) asOfEl.textContent = 'not available yet';
+    if (bannerHost){ bannerHost.style.display='none'; }
+    const av = document.getElementById('sfAvailRow'); if (av) av.innerHTML = '<div class="emptynote">No availability data yet.</div>';
+    const chart = document.getElementById('sfRawTypeChart'); if (chart) chart.innerHTML = '<div class="emptynote">No shortfall data yet.</div>';
+    return;
+  }
+  if (asOfEl) asOfEl.textContent = SFRAW.asOf || '—';
+  if (bannerHost) bannerHost.style.display = '';
+  sfrawDrawSrdenBanner();
+  sfrawRenderAvailability();
+  sfrawSetupTypePicker();
+  sfrawRenderTypeStats();
+  sfrawRenderTypeChart();
+}
+
 function drawShortfallCharts(){
   const c = chartColors();
   const catCounts = Object.entries(DATA.shortfall.catCounts).sort((a,b)=>b[1]-a[1]);
@@ -4617,6 +5065,7 @@ function drawShortfallCharts(){
     openFn: openShortfallSrdenDrawer,
   });
   setupSrdenSections();
+  safe('shortfall:rawSheet', drawShortfallRawCards);
 }
 
 // ---------------------------------------------------------------------
