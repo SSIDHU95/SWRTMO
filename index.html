@@ -1698,7 +1698,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <select id="ovTypeFocus" style="font-family:var(--sans);font-size:12.5px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);"><option value="">All machine types</option></select>
         <select id="ovTypeScale" style="font-family:var(--sans);font-size:12.5px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
           <option value="shared">Shared scale (compare across types)</option>
-          <option value="perRow">Independent scale per type (see small types clearly)</option>
+          <!-- Defaulted to "perRow" 25-Nov-2026 per Shruti. -->
+          <option value="perRow" selected>Independent scale per type (see small types clearly)</option>
         </select>
       </div>
       <div class="chartwrap" style="height:280px"><div id="ovTypeChart" class="svgchart"></div></div>
@@ -1713,7 +1714,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <select id="ovYoyFocus" style="font-family:var(--sans);font-size:12.5px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);"><option value="">All machine types</option></select>
         <select id="ovYoyScale" style="font-family:var(--sans);font-size:12.5px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
           <option value="shared">Shared scale (compare across types)</option>
-          <option value="perRow">Independent scale per type (see small types clearly)</option>
+          <!-- Defaulted to "perRow" 25-Nov-2026 per Shruti. -->
+          <option value="perRow" selected>Independent scale per type (see small types clearly)</option>
         </select>
       </div>
       <div class="chartwrap" style="height:280px; margin-top:6px;"><div id="ovYoyChart" class="svgchart"></div></div>
@@ -4433,21 +4435,26 @@ function renderOvTypeBox(){
   const mt = DATA.progress.mtypeRollup;
   const focus = (document.getElementById('ovTypeFocus')||{}).value || '';
   const focusRow = focus ? mt.find(d=>d.type===focus) : null;
-  const totalTarget = focusRow ? (focusRow.targetToDate||0) : mt.reduce((s,d)=>s+(d.targetToDate||0),0);
-  const totalActual = focusRow ? (focusRow.actualToDate||0) : mt.reduce((s,d)=>s+(d.actualToDate||0),0);
+  // Fixed 25-Nov-2026 per Shruti: with no type picked ("All machine
+  // types"), this headline box used to add every type's own figure
+  // together in one "+"-joined breakdown across units (Km/R-S/T-O/Unit
+  // all in the same line) -- she called it "of no use for all the
+  // machines" and asked for it gone, keeping only the single-number
+  // headline for whichever type is picked below.
+  if (!focusRow){ box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = '';
+  const totalTarget = focusRow.targetToDate||0;
+  const totalActual = focusRow.actualToDate||0;
   const pctChange = totalTarget>0 ? Math.round(((totalActual-totalTarget)/totalTarget)*1000)/10 : null;
   const deltaCls = (pctChange==null || pctChange>=0) ? 'good' : 'bad';
   const arrow = (pctChange==null || pctChange>=0) ? '&#9650;' : '&#9660;';
   const fmt = n => n.toLocaleString(undefined,{maximumFractionDigits:1});
-  // Fleet-wide (no focus) mixes machine types measured in different units
-  // (Km/R-S/T-O/Unit) -- show a per-unit breakdown rather than one blended,
-  // unlabelled number; a focused type has exactly one unit, so just append it.
-  const targetTxt = focusRow ? `${fmt(totalTarget)} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(mt,'targetToDate',rowUnit), fmt);
-  const actualTxt = focusRow ? `${fmt(totalActual)} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(mt,'actualToDate',rowUnit), fmt);
+  const targetTxt = `${fmt(totalTarget)} ${esc(rowUnit(focusRow))}`;
+  const actualTxt = `${fmt(totalActual)} ${esc(rowUnit(focusRow))}`;
   box.innerHTML = `<div class="yoy-row">
-    <div class="yoy-num"><div class="v">${targetTxt}</div><div class="l">Pro-rata target to date${focusRow?' &bull; '+esc(focus):''}</div></div>
+    <div class="yoy-num"><div class="v">${targetTxt}</div><div class="l">Pro-rata target to date &bull; ${esc(focus)}</div></div>
     <div class="yoy-arrow">&rarr;</div>
-    <div class="yoy-num"><div class="v">${actualTxt}</div><div class="l">Actual achieved to date${focusRow?' &bull; '+esc(focus):''}</div></div>
+    <div class="yoy-num"><div class="v">${actualTxt}</div><div class="l">Actual achieved to date &bull; ${esc(focus)}</div></div>
     <div class="yoy-delta ${deltaCls}">${arrow} ${pctChange!=null? Math.abs(pctChange)+'%' : ''}</div>
   </div>`;
 }
@@ -4480,23 +4487,30 @@ function renderYoy(){
   // (or if the focused type is somehow missing from byType).
   const focus = (document.getElementById('ovYoyFocus')||{}).value || '';
   const focusRow = focus ? (y.byType||[]).find(r=>r.type===focus) : null;
-  const priorTotal = focusRow ? focusRow.priorYear : y.priorTotal;
-  const currentTotal = focusRow ? focusRow.currentYear : y.currentTotal;
-  const totalDelta = focusRow ? focusRow.delta : y.totalDelta;
-  const totalPctChange = focusRow ? focusRow.pctChange : y.totalPctChange;
-  const deltaCls = totalDelta>=0 ? 'good' : 'bad';
-  const arrow = totalDelta>=0 ? '&#9650;' : '&#9660;';
-  // Fleet-wide (no focus) mixes machine types measured in different units
-  // (Km/R-S/T-O/Unit) -- show a per-unit breakdown rather than one blended,
-  // unlabelled number; a focused type has exactly one unit, so just append it.
-  const priorTxt = focusRow ? `${priorTotal.toLocaleString()} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(y.byType,'priorYear',rowUnit), n=>n.toLocaleString());
-  const currentTxt = focusRow ? `${currentTotal.toLocaleString()} ${esc(rowUnit(focusRow))}` : joinBreakdown(breakdownBy(y.byType,'currentYear',rowUnit), n=>n.toLocaleString());
-  box.innerHTML = `<div class="yoy-row">
-    <div class="yoy-num"><div class="v">${priorTxt}</div><div class="l">${esc(priorLbl)}${focusRow?' &bull; '+esc(focus):''}</div></div>
-    <div class="yoy-arrow">&rarr;</div>
-    <div class="yoy-num"><div class="v">${currentTxt}</div><div class="l">${esc(currentLbl)}${focusRow?' &bull; '+esc(focus):''}</div></div>
-    <div class="yoy-delta ${deltaCls}">${arrow} ${totalPctChange!=null? Math.abs(totalPctChange)+'%' : ''}</div>
-  </div>`;
+  // Fixed 25-Nov-2026 per Shruti: same fix as renderOvTypeBox() above --
+  // with no type picked ("All machine types") this box used to show a
+  // "+"-joined breakdown across every type's own unit added together;
+  // now hidden entirely with nothing picked, shown only for one type.
+  if (!focusRow){
+    box.innerHTML = '';
+    box.style.display = 'none';
+  } else {
+    box.style.display = '';
+    const priorTotal = focusRow.priorYear;
+    const currentTotal = focusRow.currentYear;
+    const totalDelta = focusRow.delta;
+    const totalPctChange = focusRow.pctChange;
+    const deltaCls = totalDelta>=0 ? 'good' : 'bad';
+    const arrow = totalDelta>=0 ? '&#9650;' : '&#9660;';
+    const priorTxt = `${priorTotal.toLocaleString()} ${esc(rowUnit(focusRow))}`;
+    const currentTxt = `${currentTotal.toLocaleString()} ${esc(rowUnit(focusRow))}`;
+    box.innerHTML = `<div class="yoy-row">
+      <div class="yoy-num"><div class="v">${priorTxt}</div><div class="l">${esc(priorLbl)} &bull; ${esc(focus)}</div></div>
+      <div class="yoy-arrow">&rarr;</div>
+      <div class="yoy-num"><div class="v">${currentTxt}</div><div class="l">${esc(currentLbl)} &bull; ${esc(focus)}</div></div>
+      <div class="yoy-delta ${deltaCls}">${arrow} ${totalPctChange!=null? Math.abs(totalPctChange)+'%' : ''}</div>
+    </div>`;
+  }
   const el = document.getElementById('ovYoyChart');
   if (!el) return;
   const scaleMode = (document.getElementById('ovYoyScale')||{}).value || 'shared';
@@ -4604,6 +4618,16 @@ function drawProgressCharts(){
     cap: 'Cumulative progress against pro-rata target, plus year-on-year &bull; pick a jurisdiction below',
     keysFn: progressSrdenKeys,
     rankFn: k=>{ const s = progressStatsForSrden(k); return s.totalTarget ? (1 - s.overallPct) : -Infinity; },
+    // Fixed 24-Nov-2026: countFn/countLabel were missing here, so
+    // renderSrdenBannerInto() fell back to its default countFn, which
+    // reads bundle[k].machineCount off DATA.shortfall.srdenBundle --
+    // permanently empty on this site (Task #53's full sync was never
+    // built), while keysFn above correctly sources jurisdictions from
+    // progress.machines instead. That mismatch threw a TypeError before
+    // the banner's HTML was ever written, leaving this card blank on
+    // every load. Same pattern as drawFleetCharts()'s working call.
+    countFn: k=> progressStatsForSrden(k).machines.length,
+    countLabel: 'machines',
     messageFn: buildProgressSrdenMessage,
     openFn: openProgressSrdenDrawer,
   });
