@@ -3067,7 +3067,11 @@ function lastTeamProgressHtml(progressMachine){
 // sheet has a value for.
 function last15DaysHtml(m){
   if (!m || !Array.isArray(m.dailyLog) || !m.dailyLog.length) return '';
-  const entries = m.dailyLog.slice(-15);
+  // m.dailyLog is oldest-first; slice(-15) grabs the most recent 15 this
+  // sheet has an entry for, then .reverse() so the newest day is shown
+  // first, counting back from there (fixed 18-Nov-2026 per Shruti: "latest
+  // should come at the top and then in decreasing order").
+  const entries = m.dailyLog.slice(-15).reverse();
   const rows = entries.map(e=>{
     const isNum = typeof e.value === 'number';
     const valHtml = isNum
@@ -3314,7 +3318,16 @@ function openIohPohDrawer(){
     dcard('How this list is built', null, `<div class="dcap">The ${esc(day)} Exception Sheet is the sole source for "currently under IOH/POH" — a machine only appears here if it's flagged there today.</div>`) +
     rows.map(r=>{
       const id = 'ip'+Math.random().toString(36).slice(2,9);
-      const m = DATA.progress.machines.find(x=>x.machine===r.Machine || x.machine===String(r.Machine).replace(' ','-'));
+      // Fixed 24-Nov-2026: r.ProgressMachine (added in aggregate.py's
+      // iohpoh_reconciled build) is the alias-resolved Cumulative
+      // Progress name for machine types whose Exception Sheet spelling
+      // differs from Cumulative Progress's (SBCM/BRM/PCTM -- see
+      // MACHINE_PREFIX_ALIASES) -- e.g. r.Machine "SBCM 1889" needs
+      // r.ProgressMachine "FRM-1889" to find its real progress.machines
+      // record at all. Checked first since it's the reliable match when
+      // present; the old exact/space-to-hyphen checks stay as a fallback
+      // for any payload generated before this fix.
+      const m = DATA.progress.machines.find(x=>x.machine===r.ProgressMachine || x.machine===r.Machine || x.machine===String(r.Machine).replace(' ','-'));
       setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>{ if(m) openMachineDetailDrawer(m.machine); }); }, 0);
       return `<div class="dmachine-card" id="${id}">
         <div class="dmtop"><span class="dmname">${esc(r.Machine)}</span><span class="dbadge ${r.Status==='IOH'?'warn':'bad'}">${esc(r.Status||'—')}</span></div>
@@ -4640,7 +4653,9 @@ function openMachineTypeMonthlyDrawer(type){
   if (iohPohRowsForType.length){
     html += dcard('IOH / POH — this machine type', `From the ${esc(DATA.exceptions.latestDayLabel||'latest')} Exception Sheet &bull; days elapsed vs. total days designated`,
       iohPohRowsForType.map(r=>{
-        const pm = DATA.progress.machines.find(x=>x.machine===r.Machine);
+        // Fixed 24-Nov-2026: same SBCM/BRM/PCTM alias fix as
+        // openIohPohDrawer() above -- match r.ProgressMachine first.
+        const pm = DATA.progress.machines.find(x=>x.machine===r.ProgressMachine || x.machine===r.Machine);
         const elapsed = (pm && pm.iohPohDaysElapsed!=null) ? pm.iohPohDaysElapsed : r.DaysUnder;
         const designated = (pm && pm.iohPohDays!=null) ? pm.iohPohDays : null;
         const over = designated!=null && elapsed!=null && elapsed>designated;
@@ -8049,7 +8064,13 @@ function drawLiveSourcesCharts(){
 // =====================================================================
 function startDashboard(){
 if (window.NM && window.NM.setData) window.NM.setData(DATA.networkMap || null);
-document.getElementById('asofLabel').textContent = `Data as of: ${DATA.meta.asOf}`;
+// Relabeled 24-Nov-2026: this is the date the automated refresh last RAN,
+// not the latest date the underlying sheets actually have data for (those
+// can legitimately lag a day or more behind -- see the daily-refresh.yml
+// cron comment for why). "Data as of" implied same-day currency and
+// misled Shruti into thinking a stale refresh was a bug; "Last refreshed"
+// says only what this value actually means.
+document.getElementById('asofLabel').textContent = `Last refreshed: ${DATA.meta.asOf}`;
 
 const chartDrawers = {
   overview: drawOverviewCharts,
