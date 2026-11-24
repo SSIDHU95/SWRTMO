@@ -1743,24 +1743,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <!-- ============ SHORTFALL ============ -->
   <section class="module" id="mod-shortfall">
     <div class="card" id="srdenBanner-shortfall"></div>
-    <div class="card">
-      <div class="cardhead"><div><h3>Sr.DEN &mdash; Shortfall Flagging</h3><div class="cap">Same jurisdictions as Overview, filtered to shortfall reasons &bull; click a row to raise the flag</div></div></div>
-      <div class="tblwrap"><table id="sfSrdenTable"><thead><tr><th>Sr.DEN</th><th class="num">Machines</th><th>Leading Shortfall Reason (Sep)</th><th class="num">Count</th></tr></thead><tbody></tbody></table></div>
-    </div>
     <div>
-      <div class="card">
-        <div class="cardhead">
-          <div><h3>By Machine Type</h3><div class="cap">Pick any machine type for its own shortfall-category breakdown &bull; click a bar for the machines behind it</div></div>
-        </div>
-        <select id="sfTypePicker" style="font-family:var(--sans);font-size:13px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;max-width:360px;margin-bottom:10px;"></select>
-        <div class="ctrlrow" style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 8px;">
-          <select id="sfTypeChartScale" style="font-family:var(--sans);font-size:12.5px;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
-            <option value="shared">Shared scale (compare across reasons)</option>
-            <option value="perRow">Independent scale per reason (see small counts clearly)</option>
-          </select>
-        </div>
-        <div class="chartwrap" style="height:320px"><div id="sfTypeChart" class="svgchart"></div></div>
-      </div>
       <div class="grid2">
         <div class="card"><h3>Category Breakdown</h3><div class="cap">Click a bar for the machines behind that reason</div><div class="chartwrap" style="height:360px"><div id="sfCatChart" class="svgchart"></div></div></div>
         <div class="card"><h3>Month-wise Trend (top 6 reasons)</h3><div class="chartwrap" style="height:360px"><div id="sfTrendChart" class="svgchart"></div></div></div>
@@ -3198,6 +3181,23 @@ function openMachineDetailDrawer(machineName){
     (sfEntries.length? `<div class="dcap" style="margin-top:8px;">Also appears among the top machines for: ${sfEntries.map(([cat])=>esc(cat)).join(', ')} (${monthLbls[0]}&ndash;${monthLbls[monthLbls.length-1]} shortfall log).</div>` : '')
   );
 
+  // Added 25-Nov-2026 per Shruti: "whenever we click on a machine in the
+  // shortfall reasons thing, the exact breakup of this also we need here:
+  // how many days have been lost where" -- "connecting data" into this
+  // SAME universal machine drawer (used everywhere a machine name is
+  // clicked), not just from the Reason-for-Shortfall tab, so the day-by-
+  // reason breakdown is always one click away for any machine that has an
+  // entry in the separate "Shortfall Reasons" sheet. SFRAW is only built
+  // once the Reason-for-Shortfall tab has been drawn at least once in this
+  // session (lazy, like every other tab here) -- guarded so this drawer
+  // never breaks for someone who opens it before visiting that tab.
+  if (typeof SFRAW !== 'undefined' && SFRAW && SFRAW.machineShortfall){
+    const sfrawE = SFRAW.machineShortfall.find(x=>x.matchedMachine===m.machine);
+    if (sfrawE){
+      html += dcard('Reason for Shortfall — Day Breakdown', `From the separate &ldquo;Shortfall Reasons&rdquo; sheet &bull; FY-to-date as of ${esc(SFRAW.asOf||'—')}`, sfrawEntityDetailHtml(sfrawE));
+    }
+  }
+
   // Added 18-Nov-2026 per Shruti: "below the issue history, there should
   // be the last 15 days' progress, day by day, as it has happened,
   // connected with the monthly progress sheet." m.dailyLog comes from
@@ -3905,21 +3905,6 @@ function setupSrdenSections(){
   Array.from(document.querySelectorAll('#ovSrdenTable tbody tr')).forEach((tr,i)=>{
     tr.style.cursor='pointer';
     tr.addEventListener('click', ()=>openSrdenDrawer(ovRows[i].key));
-  });
-
-  const sfRows = keys.map(k=>{
-    const b = bundle[k];
-    const nonProd = (b.topCategories||[]).filter(c=>c[0]!=='Productive Work - Full Progress');
-    const topCat = nonProd[0] || null;
-    return {...b, topCat};
-  }).sort((a,b)=>(b.topCat?b.topCat[1]:0)-(a.topCat?a.topCat[1]:0));
-  document.querySelector('#sfSrdenTable tbody').innerHTML = sfRows.map(b=>`<tr>
-    <td>${esc(b.key)}</td><td class="num">${b.machineCount}</td>
-    <td>${b.topCat?esc(b.topCat[0]):'—'}</td><td class="num">${b.topCat?b.topCat[1]:''}</td>
-  </tr>`).join('');
-  Array.from(document.querySelectorAll('#sfSrdenTable tbody tr')).forEach((tr,i)=>{
-    tr.style.cursor='pointer';
-    tr.addEventListener('click', ()=>openSrdenDrawer(sfRows[i].key));
   });
 
   const sel = document.getElementById('srdenSelect');
@@ -5205,11 +5190,6 @@ function drawShortfallCharts(){
     }
   });
 
-  setupTypeShortfallPicker();
-  renderSfTypeChart();
-  const sfScaleSel = document.getElementById('sfTypeChartScale');
-  if (sfScaleSel && !sfScaleSel.dataset.wired){ sfScaleSel.dataset.wired='1'; sfScaleSel.addEventListener('change', renderSfTypeChart); }
-
   renderSrdenBannerInto('shortfall', {
     heading: 'Sr.DEN Alert &mdash; Reason for Shortfall',
     cap: 'Shortfall reasons for this jurisdiction\'s own machines, last 7 days, plus the current-FY picture and suggestions for improvement &bull; pick a jurisdiction below',
@@ -5219,53 +5199,6 @@ function drawShortfallCharts(){
   });
   setupSrdenSections();
   safe('shortfall:rawSheet', drawShortfallRawCards);
-}
-
-// ---------------------------------------------------------------------
-// Reason-for-Shortfall tab: "By Machine Type" picker + chart (added
-// 08-Oct-2026 per the user, replacing the old "By Division"/"By Machine
-// Type" toggle: "I will suggest like in progress vs target you have given
-// drop down for each machine type. Give like that also... No need for
-// division wise as of now. Keep machine type wise. Also give me independent
-// scale option here... Give values over the histograms."). Click-through
-// uses catMtypeMachine (category x machine-type drilldown, mirrors
-// catDivMachine) so the drawer shows exactly the machines of that type
-// behind that reason, not every machine of that type regardless of reason
-// (the bug behind "proper details are not popping up after clicking").
-// ---------------------------------------------------------------------
-function setupTypeShortfallPicker(){
-  const sel = document.getElementById('sfTypePicker');
-  if (!sel || sel._wired) return;
-  sel._wired = true;
-  // Excludes isSecondaryMetric rows (e.g. "BCM (T/O)") -- the shortfall log has
-  // no concept of a machine's secondary unit, only its real machine type, so a
-  // pseudo-type here would just be an always-empty, confusing extra option.
-  const types = DATA.progress.mtypeRollup.filter(d=>!d.isSecondaryMetric).sort((a,b)=>a.type.localeCompare(b.type));
-  sel.innerHTML = types.map(d=>`<option value="${esc(d.type)}">${esc(d.type)} (${d.count} machines)</option>`).join('');
-  sel.addEventListener('change', renderSfTypeChart);
-}
-function renderSfTypeChart(){
-  const el = document.getElementById('sfTypeChart');
-  if (!el) return;
-  const sel = document.getElementById('sfTypePicker');
-  const type = sel ? sel.value : null;
-  if (!type){ el.innerHTML = '<div class="emptynote">No data</div>'; return; }
-  const c = chartColors();
-  const scaleMode = (document.getElementById('sfTypeChartScale')||{}).value || 'shared';
-  const rows = Object.entries(DATA.shortfall.byMtypeCat[type]||{})
-    .filter(([k])=>k!=='Productive Work - Full Progress')
-    .sort((a,b)=>b[1]-a[1]);
-  const wrap = el.parentElement;
-  if (wrap) wrap.style.height = Math.max(rows.length*28+50, 200) + 'px';
-  svgBar(el, {
-    labels: rows.map(x=>x[0]), horizontal:true, scaleMode, showValues:true,
-    series: [{label:'Entries', data: rows.map(x=>x[1]), color: c.palette[3]}],
-    onBarClick:(i)=>{
-      const cat = rows[i][0];
-      const top = ((DATA.shortfall.catMtypeMachine[cat]||{})[type]||[]);
-      drillMachineNames(`${cat} — ${type}`, `Machines of type ${esc(type)} behind this reason`, top.map(x=>x[0]));
-    }
-  });
 }
 
 function drawExceptionsCharts(){
