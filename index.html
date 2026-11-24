@@ -1743,12 +1743,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <!-- ============ SHORTFALL ============ -->
   <section class="module" id="mod-shortfall">
     <div class="card" id="srdenBanner-shortfall"></div>
-    <div>
-      <div class="grid2">
-        <div class="card"><h3>Category Breakdown</h3><div class="cap">Click a bar for the machines behind that reason</div><div class="chartwrap" style="height:360px"><div id="sfCatChart" class="svgchart"></div></div></div>
-        <div class="card"><h3>Month-wise Trend (top 6 reasons)</h3><div class="chartwrap" style="height:360px"><div id="sfTrendChart" class="svgchart"></div></div></div>
-      </div>
-    </div>
 
     <!-- ============ NEW 25-Nov-2026: Machine-wise Shortfall & Availability.
          Built from the separate "Shortfall Reasons" Google Sheet (division
@@ -5157,39 +5151,6 @@ function drawShortfallRawCards(){
 }
 
 function drawShortfallCharts(){
-  const c = chartColors();
-  const catCounts = Object.entries(DATA.shortfall.catCounts).sort((a,b)=>b[1]-a[1]);
-  const nonProd = catCounts.filter(([k])=>k!=='Productive Work - Full Progress');
-  const catDrill = (cat, count)=>{
-    const top = (DATA.shortfall.catMachine[cat]||[]);
-    // Fixed 13-Nov-2026 per Shruti -- caption now reflects the actual FY
-    // month span instead of a frozen "Apr-Sep" string.
-    const sfMonths = fyMonthsPresent(DATA.progress.machines);
-    const sfSpan = `${FY_MONTH_LABELS[sfMonths[0]]}&ndash;${FY_MONTH_LABELS[sfMonths[sfMonths.length-1]]}`;
-    drillMachineNames(cat, `Top machines behind this reason, ${sfSpan} &bull; ${count} entries total`, top.map(x=>x[0]));
-  };
-
-  svgBar(document.getElementById('sfCatChart'), {
-    labels: catCounts.map(x=>x[0]), horizontal:true, showValues:true,
-    series:[{label:'Entries', data:catCounts.map(x=>x[1]), colors:catCounts.map(([k])=>k==='Productive Work - Full Progress'?c.palette[1]:c.palette[3])}],
-    onBarClick:(i)=>catDrill(catCounts[i][0], catCounts[i][1])
-  });
-
-  // Fixed 13-Nov-2026 per Shruti -- full FY month list instead of a frozen
-  // Apr-Sep window (see FY_MONTH_LABELS / pipeline_helpers.MONTH_ABBR). This
-  // chart is keyed by capitalized month label (DATA.shortfall.byMonthCat),
-  // so Object.values() of FY_MONTH_LABELS (already in FY order) is used
-  // directly rather than fyMonthsPresent()+fyMonthLabelsFor().
-  const months = Object.values(FY_MONTH_LABELS);
-  const topCats = nonProd.slice(0,6).map(x=>x[0]);
-  svgLine(document.getElementById('sfTrendChart'), {
-    labels: months, showValues: true,
-    series: topCats.map((cat,i)=>({label:cat, data:months.map(m=>(DATA.shortfall.byMonthCat[m]||{})[cat]||0), color:c.palette[i%c.palette.length]})),
-    onPointClick:(li,si,monthLbl,val,se)=>{
-      openDrawer(se.label, `${monthLbl} 2026`, `<div class="drawer-row"><div class="t1">${val} entries</div><div class="t2">Tagged "${esc(se.label)}" in ${esc(monthLbl)} across all divisions.</div></div>`);
-    }
-  });
-
   renderSrdenBannerInto('shortfall', {
     heading: 'Sr.DEN Alert &mdash; Reason for Shortfall',
     cap: 'Shortfall reasons for this jurisdiction\'s own machines, last 7 days, plus the current-FY picture and suggestions for improvement &bull; pick a jurisdiction below',
