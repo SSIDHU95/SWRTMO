@@ -1675,17 +1675,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="exc-list" id="excList" style="max-height:600px; overflow-y:auto;"></div>
     </div>
 
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Top Exceptions by Sr.DEN</h3><div class="cap">Which Sr.DEN jurisdictions need attention today &bull; click a row for detail</div></div>
-      </div>
-      <div class="tblwrap"><table id="ovSrdenTable"><thead><tr><th>Sr.DEN</th><th class="num">Machines</th><th class="num">Open Exceptions</th><th>Top Issue Types</th></tr></thead><tbody></tbody></table></div>
-    </div>
-
-    <div class="grid2">
-      <div class="card"><h3>Open Exceptions by Category</h3><div class="cap" id="excCatCap">&mdash; &bull; click a bar for the machines</div><div class="chartwrap" style="height:280px"><div id="excCatChart" class="svgchart"></div></div></div>
-      <div class="card"><h3 id="excTrendTitle">Trend</h3><div class="cap" id="excTrendCap">Total open exceptions</div><div class="chartwrap" style="height:280px"><div id="excTrendChart" class="svgchart"></div></div></div>
-    </div>
+    <div class="card"><h3>Open Exceptions by Category</h3><div class="cap" id="excCatCap">&mdash; &bull; click a bar for the machines</div><div class="chartwrap" style="height:280px"><div id="excCatChart" class="svgchart"></div></div></div>
   </section>
 
   <!-- ============ FLEET HEALTH (IOH/POH focus) — rebuilt 01-Oct-2026 to use the
@@ -3730,38 +3720,74 @@ function openProgressSrdenDrawer(key){
   });
 }
 
-function setupSrdenSections(){
-  const bundle = DATA.shortfall.srdenBundle;
-  const keys = Object.keys(bundle).sort();
-
-  const ovRows = keys.map(k=>{
-    const b = bundle[k];
-    const excCount = Object.values(b.exceptionsByType||{}).reduce((s,arr)=>s+arr.length,0);
-    return {...b, excCount};
-  }).sort((a,b)=>b.excCount-a.excCount);
-  document.querySelector('#ovSrdenTable tbody').innerHTML = ovRows.map(b=>`<tr>
-    <td>${esc(b.key)}</td><td class="num">${b.machineCount}</td><td class="num">${b.excCount}</td>
-    <td>${esc(Object.keys(b.exceptionsByType||{}).join(', ')||'—')}</td>
-  </tr>`).join('');
-  Array.from(document.querySelectorAll('#ovSrdenTable tbody tr')).forEach((tr,i)=>{
-    tr.style.cursor='pointer';
-    tr.addEventListener('click', ()=>openSrdenDrawer(ovRows[i].key));
+// ---------------------------------------------------------------------
+// Exceptions-tab "Sr.DEN Alert Message" -- rebuilt 25-Nov-2026 per Shruti
+// ("the senior DEN messages are not being auto-drafted... in the exception
+// sheet there will be machine numbers, and already, according to the
+// machine numbers, you know where the machines are working and under
+// which senior DEN"). This used to read DATA.shortfall.srdenBundle, same
+// as the old "Top Exceptions by Sr.DEN" table (now removed) -- that bundle
+// depends on the Daily Progress shortfall-category log, which has no live
+// Supabase sync yet (Task #53), so it's empty and the message always fell
+// back to "No Sr.DEN jurisdiction data available yet." The Exception Sheet
+// itself is live and working (see the KPI tiles and Exceptions list above
+// it), and every exception row already carries a Machine name -- so this
+// builds the message straight from that, using the SAME machine->Sr.DEN
+// mapping (m.srden off DATA.progress.machines) already trusted everywhere
+// else on the site (progressSrdenKeys(), machinesForSrden() above). Same
+// exact-name-first / unambiguous-fuzzy-key-second matching discipline as
+// openMachineDetailDrawer's excRows lookup -- an exception whose machine
+// name can't be matched with confidence is left out rather than guessed
+// into the wrong jurisdiction.
+// ---------------------------------------------------------------------
+let _srdenExcIndex = null;
+function srdenExceptionIndex(){
+  if (_srdenExcIndex) return _srdenExcIndex;
+  const byExact = {}, byKey = {};
+  (DATA.progress.machines||[]).forEach(m=>{
+    byExact[m.machine] = m;
+    const k = machineKeyJs(m.machine);
+    (byKey[k]=byKey[k]||[]).push(m);
   });
-
+  _srdenExcIndex = {byExact, byKey};
+  return _srdenExcIndex;
+}
+function srdenForException(e){
+  const idx = srdenExceptionIndex();
+  const exact = idx.byExact[e.Machine];
+  if (exact) return exact.srden || null;
+  const cands = idx.byKey[machineKeyJs(e.Machine)] || [];
+  return cands.length===1 ? (cands[0].srden||null) : null;
+}
+function exceptionsForSrden(key){
+  return (DATA.exceptions.latest||[]).filter(e=>srdenForException(e)===key)
+    .sort((a,b)=>(b.DaysUnder||0)-(a.DaysUnder||0)); // longest-pending first
+}
+function buildExceptionSrdenMessage(key){
+  const rows = exceptionsForSrden(key);
+  const machineCount = machinesForSrden(key).length;
+  const day = DATA.exceptions.latestDayLabel || DATA.meta.asOf || '';
+  let msg = `*Sr.DEN Alert — Open Exceptions — ${key} — ${day}*\n`;
+  msg += `(${machineCount} machines working in this jurisdiction, ${rows.length} with an open exception)\n\n`;
+  if (rows.length){
+    msg += `*Machines needing attention, longest-pending first:*\n`;
+    rows.forEach(e=>{
+      msg += `- ${e.Machine} — ${e.Category||'—'} (${e.DaysUnder??'—'}d, since ${e.UnderSince||'—'})${e.Location?' — '+e.Location:''}${e.Remarks?' — '+e.Remarks:''}\n`;
+    });
+    msg += `\n*Request:* please expedite clearance/repair for the machines flagged above.\n\n— Dy.CE/TM, SWR`;
+  } else {
+    msg += `No open exceptions logged for this jurisdiction as of ${day||'the latest snapshot'}.\n\n— Dy.CE/TM, SWR`;
+  }
+  return msg;
+}
+function setupSrdenSections(){
   const sel = document.getElementById('srdenSelect');
-  sel.innerHTML = keys.map(k=>`<option value="${esc(k)}">${esc(k)} (${bundle[k].machineCount} machines)</option>`).join('');
-  // Guard added 13-Nov-2026 (found while verifying the website's 5 fixes,
-  // not one of the 5 itself): DATA.shortfall.srdenBundle is empty right now
-  // because the Daily Progress shortfall-category log has no live Supabase
-  // sync yet (Task #53, same root cause as the Sr.DEN gap -- see
-  // extract_shortfall_records() in aggregate.py). With no <option>s, sel.value
-  // was "" and bundle[""] was undefined, so every Overview/Shortfall/
-  // Exceptions redraw threw here. Degrade quietly instead of throwing; once
-  // that sync exists this behaves exactly as before.
+  if (!sel) return; // only present on the Exceptions tab
+  const keys = progressSrdenKeys();
+  sel.innerHTML = keys.map(k=>`<option value="${esc(k)}">${esc(k)} (${machinesForSrden(k).length} machines)</option>`).join('');
   function renderMsg(){
     const box = document.getElementById('srdenMsgBox');
-    const msg = bundle[sel.value];
-    box.textContent = msg ? msg.message : 'No Sr.DEN jurisdiction data available yet.';
+    box.textContent = sel.value ? buildExceptionSrdenMessage(sel.value) : 'No Sr.DEN jurisdiction data available yet.';
   }
   sel.addEventListener('change', renderMsg);
   renderMsg();
@@ -3773,7 +3799,7 @@ function setupSrdenSections(){
   });
   document.getElementById('srdenDownload').addEventListener('click', (e)=>{
     const k = sel.value;
-    downloadTextAsImage(bundle[k].message, k.replace(/[\/\s]+/g,'-')+'-message.png', e.currentTarget);
+    downloadTextAsImage(buildExceptionSrdenMessage(k), k.replace(/[\/\s]+/g,'-')+'-message.png', e.currentTarget);
   });
 }
 
@@ -5017,11 +5043,6 @@ function drawExceptionsCharts(){
     series:[{label:'Machines', data:catCounts.map(x=>x[1]), color:c.palette[3]}],
     onBarClick:(i)=>{ const cat = catCounts[i][0]; openExceptionsDrawer(e=>(e.CategoryLabel||e.Category)===cat); }
   });
-  svgLine(document.getElementById('excTrendChart'), {
-    labels: DATA.exceptions.trend.map(d=>d.day),
-    series:[{label:'Open exceptions', data:DATA.exceptions.trend.map(d=>d.count), color:c.palette[0]}],
-    showValues: true
-  });
   setupSrdenSections();
 }
 
@@ -5407,7 +5428,6 @@ function setupDoubleShiftLogTable(){
 // =====================================================================
 function hydrateDynamicCaptions(){
   const day = DATA.exceptions.latestDayLabel || '—';
-  const range = DATA.exceptions.trendRangeLabel || day;
   const setText = (id, text)=>{ const el=document.getElementById(id); if(el) el.textContent = text; };
   const setHtml = (id, html)=>{ const el=document.getElementById(id); if(el) el.innerHTML = html; };
   setText('flAgeCap', `${DATA.meta.fleetSize} machines, SWR track machine fleet — click a bar for the machine list`);
@@ -5418,8 +5438,6 @@ function hydrateDynamicCaptions(){
   const rvSfSpan = `${FY_MONTH_LABELS[rvSfMonths[0]]}&ndash;${FY_MONTH_LABELS[rvSfMonths[rvSfMonths.length-1]]} ${DATA.meta.fy||''}`;
   setHtml('rvSfCap', `${rvSfSpan} &bull; ${(DATA.shortfall.totalEntries||0).toLocaleString()} tagged Remarks entries`);
   setHtml('excCatCap', `${esc(day)} &bull; click a bar for the machines`);
-  setText('excTrendTitle', `${DATA.exceptions.trend.length}-Day Trend`);
-  setText('excTrendCap', `Total open exceptions, ${range}`);
   setText('excListTitle', `Exceptions — ${day}`);
 }
 
