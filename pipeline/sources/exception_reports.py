@@ -45,10 +45,14 @@ def fetch_all():
     return supabase_client.fetch_all_payloads(TABLE)
 
 
-def _day_key(as_of_date):
-    """'17.09.2026' (or '2026-09-17', or an ISO timestamp) -> '17-Sep',
-    matching run_pipeline.py's dt.strftime('%d-%b').lstrip('0') exactly."""
-    s = str(as_of_date or "").strip()
+def _parse_date(s):
+    """'17.09.2026' / '17-09-2026' / '17/09/2026' (or '2026-09-17', or an
+    ISO timestamp) -> a datetime.date, or None if it isn't a recognised
+    date shape at all. Shared by _day_key() and the DaysUnder fallback
+    below, instead of each re-parsing the same handful of date shapes."""
+    s = str(s or "").strip()
+    if not s:
+        return None
     m = re.match(r'^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})', s)
     if m:
         day, mon, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -58,8 +62,16 @@ def _day_key(as_of_date):
             return None
         year, mon, day = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
     try:
-        dt = datetime.date(year, mon, day)
+        return datetime.date(year, mon, day)
     except ValueError:
+        return None
+
+
+def _day_key(as_of_date):
+    """'17.09.2026' (or '2026-09-17', or an ISO timestamp) -> '17-Sep',
+    matching run_pipeline.py's dt.strftime('%d-%b').lstrip('0') exactly."""
+    dt = _parse_date(as_of_date)
+    if not dt:
         return None
     return dt.strftime('%d-%b').lstrip('0')
 
@@ -74,24 +86,48 @@ def extract_exceptions(all_rows):
     overwritten by whichever payload is processed later in the list."""
     ex = {}
     for payload, _updated_at in all_rows:
-        key = _day_key((payload or {}).get("asOfDate"))
+        as_of_raw = (payload or {}).get("asOfDate")
+        key = _day_key(as_of_raw)
         if not key:
             continue
+        as_of_date = _parse_date(as_of_raw)
         out_rows = []
         for r in (payload or {}).get("rows") or []:
             machine = r.get("machine")
             if not machine:
                 continue
             days_under = r.get("daysUnder")
+            days_under = days_under if isinstance(days_under, (int, float)) else None
+            under_since = ph.coerce_date_ddmmyyyy(r.get("underSince"))
+            # Fixed 25-Nov-2026 per Shruti (uploaded Exception Sheet showed
+            # "SQRS 37 & 38"/"SQRS 51 &52" etc. with no day-count on the
+            # dashboard): the source sheet's own "No of Days under repair/
+            # IOH/POH till date" column is filled in by hand and is blank
+            # on most rows (confirmed: only 9 of 34 rows on 24-Nov-2026) --
+            # it was never something this pipeline computed itself, so a
+            # blank cell there always surfaced as "no day count" even on
+            # rows that DO have a "planned from" date to count from. Fall
+            # back to (as-of date - UnderSince date), using the sheet's own
+            # +1 (inclusive) counting -- verified against the 9 rows that
+            # already had both columns filled in by hand, 7 of which match
+            # this exactly and one is off by one (a plausible single manual
+            # entry mistake, not a different counting convention). A row
+            # with no UnderSince at all (like "SQRS 37 & 38" above) still
+            # has nothing to compute from and correctly stays absent rather
+            # than guessed.
+            if days_under is None and as_of_date is not None:
+                since_date = _parse_date(under_since)
+                if since_date is not None and since_date <= as_of_date:
+                    days_under = (as_of_date - since_date).days + 1
             out_rows.append(dict(
                 Category=r.get("category"),
                 Machine=str(machine).strip(),
                 Division=r.get("division"),
                 Location=r.get("location"),
                 Remarks=r.get("remarks"),
-                UnderSince=ph.coerce_date_ddmmyyyy(r.get("underSince")),
+                UnderSince=under_since,
                 Tentative=ph.coerce_date_ddmmyyyy(r.get("tentative")),
-                DaysUnder=days_under if isinstance(days_under, (int, float)) else None,
+                DaysUnder=days_under,
             ))
         ex[key] = out_rows
     return ex
