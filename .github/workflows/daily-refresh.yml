@@ -31,10 +31,32 @@ name: SAMARTH daily data refresh
 # ---------------------------------------------------------------------
 on:
   schedule:
-    # 04:30 UTC = ~10:00 AM IST, matching the existing claude.ai Artifact's
-    # own daily-refresh cadence (see supabase-live-deployment-notes.md) so
-    # the live website and the Artifact snapshot stay on the same rhythm.
-    - cron: '30 4 * * *'
+    # Two runs a day from 25-Nov-2026, per Shruti ("set github with a
+    # margin so it doesn't miss... set a refresh twice a day"), after we
+    # saw a scheduled run on GitHub actually fire ~10-11 hours late (it
+    # showed "15h ago" at 11:48 AM, meaning it really ran the previous
+    # evening, not at its 10:00 AM slot). Two changes, for two different
+    # problems:
+    #
+    # 1. Wider margin on the morning run: 05:15 UTC = ~10:45 AM IST,
+    #    widened from the previous 10:00 AM (only a ~30-minute gap after
+    #    the ~9:30 AM Apps Script sync). This guards against the Apps
+    #    Script trigger itself landing a few minutes later than its
+    #    ~9:30 AM target on a given day -- Apps Script time triggers are
+    #    not minute-exact either.
+    # 2. A second, backup run in the evening: 13:00 UTC = ~6:30 PM IST.
+    #    This is the real fix for the bigger problem above -- GitHub
+    #    itself can delay or, rarely, drop a scheduled ("cron") run during
+    #    busy periods on its own infrastructure, by hours, unpredictably.
+    #    No amount of margin on the morning time fixes that; it can only
+    #    be caught by a second attempt later the same day, so a missed/
+    #    very-late morning run still gets the dashboard refreshed before
+    #    the day is over. The evening run simply re-reads whatever the
+    #    Google Sheets already have (they only change once a day, via the
+    #    ~9:30 AM Apps Script sync) and re-pushes to Supabase -- harmless
+    #    to run twice on a day when the morning run worked fine.
+    - cron: '15 5 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       as_of:
