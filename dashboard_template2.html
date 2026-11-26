@@ -1879,7 +1879,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="dsub-nav" id="ucFyToggle"></div>
     </div>
-    <div class="kpirow" id="ucKpiRow"></div>
+    <!-- ucKpiRow (Machines Costed / Total Daily Cost / Avg Daily Cost / Avg
+         Unit Cost / Costliest Machine) removed 26-Nov-2026 per Shruti:
+         "machine costed daily cost, that also you can remove" -- the
+         underlying kpi block is still computed server-side (ucBlock().kpi),
+         just unused by the UI now. Cost by Machine Type below is now the
+         first card in the tab, per her request. -->
     <div class="card">
       <div class="cardhead">
         <div><h3>Cost by Machine Type</h3><div class="cap">Pick a machine type (group) to break both charts below into one bar per individual machine, with that group's total cost shown here &bull; leave blank for the type-average view</div></div>
@@ -1899,15 +1904,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div class="chartwrap" style="height:280px"><div id="ucTypeDailyChart" class="svgchart"></div></div>
       </div>
     </div>
-    <div class="card" id="ucTrendCard" style="display:none;">
-      <div class="cardhead">
-        <div><h3>Year-on-Year Cost Movers</h3><div class="cap" id="ucTrendCap">Biggest Unit Cost changes vs the prior FY &bull; click a machine for full detail</div></div>
-      </div>
-      <div class="grid2">
-        <div><div class="cap" style="margin-bottom:6px;"><b>Got costlier</b></div><div id="ucTrendUpList"></div></div>
-        <div><div class="cap" style="margin-bottom:6px;"><b>Got cheaper</b></div><div id="ucTrendDownList"></div></div>
-      </div>
-    </div>
+    <!-- Year-on-Year Cost Movers card removed 26-Nov-2026 per Shruti: "year-on-year
+         movers, you can remove." unitCostChangePct stays computed per machine
+         and still drives the YoY column in the table below and the per-machine
+         drawer -- only this standalone movers card is gone. -->
     <div class="card">
       <div class="cardhead">
         <div><h3>Machine-wise Unit Cost &amp; Daily Cost</h3><div class="cap" id="ucTableCap">Every machine in the source sheet &bull; click a row for the full cost breakdown</div></div>
@@ -5471,31 +5471,10 @@ function renderUcFyToggle(){
     });
   });
 }
-function renderUcKpis(){
-  const row = document.getElementById('ucKpiRow');
-  if (!row) return;
-  if (!ucAvailable() || !ucBlock()){
-    row.innerHTML = '<div class="kpi" style="cursor:default"><div class="lbl">Unit Cost</div><div class="val">—</div><div class="hint">No Unit Cost workbook found in the latest sync</div></div>';
-    return;
-  }
-  const k = ucBlock().kpi;
-  const costliestM = k.costliestMachine ? ucBlock().machines.find(x=>x.machine===k.costliestMachine) : null;
-  const kpis = [
-    {l:'Machines Costed', v:k.machineCount, hint:esc(ucFy)},
-    {l:'Total Daily Cost', v:fmtRs(k.totalDailyCost)+'<span class="uc-suffix">/day</span>', hint:'fleet-wide, whether machines work or not'},
-    {l:'Avg Daily Cost', v:fmtRs(k.avgDailyCost)+'<span class="uc-suffix">/day</span>', hint:'per machine'},
-    {l:'Avg Unit Cost', v:fmtRs(k.avgUnitCost), hint:'per machine, Rs per unit of progress &mdash; mixes units across types'},
-    {l:'Costliest Machine', v:esc(k.costliestMachine||'—'), hint:`${fmtRs(k.costliestUnitCost)}/${esc(ucUnitLabel(costliestM))}`, fn: k.costliestMachine ? ()=>ucOpenByName(k.costliestMachine) : null},
-  ];
-  row.innerHTML = kpis.map(x=>`<div class="kpi"${x.fn?'':' style="cursor:default"'}><div class="lbl">${x.l}</div><div class="val">${x.v}</div><div class="hint">${x.hint||''}</div></div>`).join('');
-  Array.from(row.querySelectorAll('.kpi')).forEach((e,i)=>{ if (kpis[i].fn) e.addEventListener('click', kpis[i].fn); });
-}
-function ucOpenByName(name){
-  const b = ucBlock();
-  if (!b) return;
-  const m = b.machines.find(x=>x.machine===name);
-  if (m) openUcMachineDrawer(m.machineKey);
-}
+// renderUcKpis()/ucOpenByName() (the Machines Costed / Total Daily Cost /
+// Avg Daily Cost / Avg Unit Cost / Costliest Machine tiles) removed
+// 26-Nov-2026 per Shruti -- see the ucKpiRow HTML comment above.
+// ucBlock().kpi itself is untouched (still computed, just unused by the UI).
 function ucTypeChartData(field){
   const b = ucBlock();
   if (!b) return {labels:[], data:[]};
@@ -5618,30 +5597,10 @@ function renderUcTypeCharts(){
     onBarClick:(i)=> ucFocusType(d.labels[i]),
   }));
 }
-function renderUcTrend(){
-  const card = document.getElementById('ucTrendCard');
-  const upList = document.getElementById('ucTrendUpList');
-  const downList = document.getElementById('ucTrendDownList');
-  if (!card || !upList || !downList) return;
-  const b = ucBlock();
-  const withDelta = b ? b.machines.filter(m=>m.unitCostChangePct!=null) : [];
-  if (!withDelta.length){ card.style.display = 'none'; return; }
-  card.style.display = '';
-  const years = ucYears();
-  const idx = years.indexOf(ucFy);
-  const prevFy = idx>0 ? years[idx-1] : null;
-  const capEl = document.getElementById('ucTrendCap');
-  if (capEl) capEl.innerHTML = `Biggest Unit Cost changes, ${esc(ucFy)} vs ${esc(prevFy||'prior FY')} &bull; click a machine for full detail`;
-  const up = [...withDelta].sort((a,b2)=>b2.unitCostChangePct-a.unitCostChangePct).filter(m=>m.unitCostChangePct>0).slice(0,5);
-  const down = [...withDelta].sort((a,b2)=>a.unitCostChangePct-b2.unitCostChangePct).filter(m=>m.unitCostChangePct<0).slice(0,5);
-  const rowHtml = (m)=>{
-    const up2 = m.unitCostChangePct>0;
-    const countHtml = `<span style="color:var(${up2?'--bad':'--good'})">${up2?'+':''}${m.unitCostChangePct}%</span>`;
-    return breakRow(m.machine, `${esc(m.type||'—')} &bull; ${ucUnitCostHtml(m)}`, countHtml, null, ()=>openUcMachineDrawer(m.machineKey));
-  };
-  upList.innerHTML = up.length ? up.map(rowHtml).join('') : '<div class="emptynote">No machine got costlier.</div>';
-  downList.innerHTML = down.length ? down.map(rowHtml).join('') : '<div class="emptynote">No machine got cheaper.</div>';
-}
+// renderUcTrend() (the Year-on-Year Cost Movers card) removed 26-Nov-2026
+// per Shruti -- see the ucTrendCard HTML comment above. unitCostChangePct
+// is still computed per machine and drives the table's YoY column and the
+// per-machine drawer.
 const ucSortState = {key:'unitCost', dir:-1};
 function ucFilteredRows(){
   const b = ucBlock();
@@ -5774,10 +5733,8 @@ function openUcSourceDrawer(){
 function drawUcCharts(){
   renderUcNote();
   renderUcFyToggle();
-  renderUcKpis();
   setupUcGroupControl();
   renderUcTypeCharts();
-  renderUcTrend();
   renderUcTable();
   const srcBtn = document.getElementById('ucSourceBtn');
   if (srcBtn && !srcBtn._wired){ srcBtn._wired = true; srcBtn.addEventListener('click', openUcSourceDrawer); }
