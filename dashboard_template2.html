@@ -1687,7 +1687,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="card" id="srdenBanner-fleet"></div>
     <div class="card">
       <h3>Fleet Health &mdash; IOH/POH Release, FY 2026-27</h3>
-      <div class="cap" id="flHeaderCap">Primary source: IOH/POH Planning, Dy.CE/TM office letter &bull; not the Exception Sheet or Cumulative Progress Status. The current-FY schedule above, the all-fleet multi-year outlook (FY 27-30), IOH/POH service norms, and CPOH/RYP's own forward POH planning for FY 27-30 are all below, on this tab.</div>
+      <div class="cap" id="flHeaderCap">Primary source: IOH/POH Planning's own &ldquo;Progress 2026-27&rdquo; sheet (parent division, who's arrived, who's completed) &bull; not the Exception Sheet or Cumulative Progress Status. The current-FY schedule above, the all-fleet multi-year outlook (FY 27-30), and CPOH/RYP's own forward POH planning for FY 27-30 are all below, on this tab.</div>
     </div>
     <div class="kpirow" id="flKpiRow"></div>
 
@@ -1705,20 +1705,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="grid3" id="flDivGrid"></div>
     </div>
 
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>POH Release Priority List &mdash; CPOH/RYP</h3><div class="cap">Machines sent to the Central POH workshop at RYP, a third release location alongside ZBD/YPR and STMRD/UBL &bull; also counted in the KPIs and Completed breakdown above</div></div>
-      </div>
-      <div id="flPriorityList"></div>
-    </div>
-
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>IOH Release Priority List</h3><div class="cap">From the main schedule above &mdash; IOH machines yet to release from division, or currently under attention</div></div>
-      </div>
-      <div id="flIohPriorityList"></div>
-    </div>
-
     <!-- ============ IOH/POH multi-year outlook + service norms (moved here
          from Infrastructure Planning on 12-Oct-2026 per the user: "Move the
          IOH POH details from infrastructure tab to Fleet health tab... Remove
@@ -1731,12 +1717,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="grid3" id="infraIohPohFutureGrid"></div>
     </div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>IOH/POH Service Norms (Reference)</h3><div class="cap">IRTMM-prescribed intervals by machine type &bull; from the same workbook's "IOH POH Duration" sheet</div></div>
-      </div>
-      <div class="tblwrap"><table id="infraIohPohNormsTable"><thead><tr><th>Type</th><th class="num">IOH (days)</th><th class="num">1st POH (days)</th><th class="num">Subsequent POH (days)</th><th class="num">IOH (hrs)</th><th>POH (hrs)</th></tr></thead><tbody></tbody></table></div>
-    </div>
+    <!-- IOH/POH Service Norms (removed as a standalone card 26-Nov-2026 per
+         Shruti: "you can save it for your reference... Chart is not
+         required to be displayed. Whenever I click the data for a
+         particular machine which has been planned, you can just show it
+         there" -- the norms data (DATA.fleet.iohPohSchedule.norms) is kept
+         in the payload and now surfaces inline in a planned machine's own
+         detail drawer instead; see iohPohNormDetailHtml()/
+         openMachineDetailDrawer(). -->
 
     <!-- ============ CPOH/RYP POH PLANNING (added 05-Oct-2026, moved here from
          Infrastructure Planning on 08-Oct-2026 per the user: "In the next three
@@ -1747,7 +1735,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
          POH workshop, 2027-28 through 2029-30, plus tamping-unit demand. ============ -->
     <div class="card">
       <h3>CPOH/RYP &mdash; Central POH Planning, FY 2027-28 to 2029-30</h3>
-      <div class="cap" id="cpohHeaderCap">Dy.CE/TM's own forward proposal to Dy.CE/CPOH/RYP &bull; the current year's CPOH/RYP release status is in the "POH Release Priority List — CPOH/RYP" card above</div>
+      <div class="cap" id="cpohHeaderCap">Dy.CE/TM's own forward proposal to Dy.CE/CPOH/RYP &bull; the current year's CPOH/RYP release status is in the &ldquo;Division-wise FY 2026-27 Schedule&rdquo; card above</div>
     </div>
     <div class="kpirow" id="cpohKpiRow"></div>
     <div class="card">
@@ -3000,6 +2988,44 @@ function openMachineDetailDrawer(machineName){
     ]) + `<div class="dcap" style="margin-top:8px;">Exact deputation start date is not separately tracked in the source workbooks; figures above are the machine's recorded progress for FY2026-27 at its current location.</div>`);
   }
 
+  // Added 26-Nov-2026 per Shruti ("Whenever I click the data for a
+  // particular machine which has been planned, you can just show it
+  // there, like DT machine, how many days, how many required... All the
+  // details are there: whether it is first IOH, first POH, or second
+  // subsequent"): this is the FY2026-27 PLANNED schedule entry (from the
+  // Progress 2026-2027 sheet, via DATA.fleet.iohPohSchedule.currentYear),
+  // not the same thing as the "IOH / POH" card above (which is the
+  // Exception Sheet's live reconciled under-IOH/POH status) -- a machine
+  // can appear in one, the other, both, or neither. The matching IRTMM
+  // norm for this machine's type (the former standalone "IOH/POH Service
+  // Norms" card, now reference-only) is shown alongside so the actual vs.
+  // stipulated days are both visible in one place.
+  const cySched = DATA.fleet.iohPohSchedule && DATA.fleet.iohPohSchedule.currentYear;
+  const cyEvent = cySched && cySched.events.find(e=>e.machine===m.machine);
+  if (cyEvent){
+    const norm = iohPohNormFor(m.type);
+    const normDays = cyEvent.type==='IOH' ? norm && norm.iohDays
+      : (cyEvent.term && /^first/i.test(cyEvent.term) ? norm && norm.firstPohDays : norm && norm.subsequentPohDays);
+    let body = statRow([
+      {l:'Status', v: fleetStatusBadge(cyEvent.status)},
+      {l:'Term', v: esc(cyEvent.term||'—')},
+      {l:'Planned month', v: esc(cyEvent.month||'—')},
+      {l:'Location', v: esc(cyEvent.location||'—')},
+    ]);
+    if (cyEvent.arrivalDate || cyEvent.completionDate || cyEvent.tentative){
+      body += statRow([
+        {l:'Arrived', v: esc(cyEvent.arrivalDate||'—')},
+        {l:'Completed', v: esc(cyEvent.completionDate||(cyEvent.tentative? `expected ~${cyEvent.tentative}` : '—'))},
+        {l:'Days taken', v: cyEvent.totalDays ?? '—'},
+        {l:'Stipulated (this row)', v: cyEvent.stipulatedDays ?? '—', cls: (cyEvent.totalDays!=null && cyEvent.stipulatedDays!=null)? (cyEvent.totalDays<=cyEvent.stipulatedDays?'good':'warn') : ''},
+      ]);
+    }
+    if (norm){
+      body += `<div class="dcap" style="margin-top:8px;">IRTMM norm for ${esc(m.type||'this type')}: IOH ${norm.iohDays??'—'}d &bull; 1st POH ${norm.firstPohDays??'—'}d &bull; subsequent POH ${norm.subsequentPohDays??'—'}d &bull; IOH ${norm.iohHrs??'—'} hrs &bull; POH ${esc(norm.pohHrs??'—')} hrs${normDays!=null?` (this ${cyEvent.type==='IOH'?'IOH':'POH term'} is normally ${normDays} days)`:''}</div>`;
+    }
+    html += dcard(`IOH/POH Schedule — FY ${esc(cySched.fy||'26-27')}`, `From the Progress ${esc(cySched.fy||'2026-27')} sheet`, body);
+  }
+
   // exact match always safe; fuzzy (alnum/leading-zero) match only when this
   // machine's key isn't shared by another real machine (see ensureMachineKeyIndex)
   const mKey = machineKeyJs(m.machine);
@@ -3955,18 +3981,24 @@ function renderExcList(){
 const FL_DIV_LABEL = {UBL:'Hubballi', SBC:'Bengaluru', MYS:'Mysuru'};
 const FL_STATUS_BADGE_CLS = {
   'Completed':'good', 'Ongoing / Under Attention':'accent',
-  'Yet to Release from Division':'warn', 'Due for Release':'warn',
-  'Overdue for Release':'bad',
+  'Overdue for Release':'bad', 'Upcoming':'',
 };
 function fleetStatusBadge(status){
-  return `<span class="dbadge ${FL_STATUS_BADGE_CLS[status]||''}">${esc(status||'Scheduled')}</span>`;
+  return `<span class="dbadge ${FL_STATUS_BADGE_CLS[status]||''}">${esc(status||'Upcoming')}</span>`;
 }
 function flSortEvents(evs){
   return [...evs].sort((a,b)=> (a.monthSort[0]-b.monthSort[0]) || (a.monthSort[1]-b.monthSort[1]) || String(a.machine).localeCompare(String(b.machine)));
 }
 function flCurrentEventBulletHtml(e){
   const od = (e.overdueMonths!=null) ? ` &mdash; overdue by ${e.overdueMonths}${e.overdueMonths===1?' month':' months'}` : '';
-  return `<li><b>${esc(e.machine)}</b> &mdash; ${esc(e.type||'')} scheduled <b>${esc(e.month||'—')}</b>${e.location?(' at '+esc(e.location)):''}${e.srden?(' &bull; '+esc(e.srden)):''} ${fleetStatusBadge(e.status)}${od}</li>`;
+  // Added 26-Nov-2026: show what actually happened, not just the originally
+  // planned month, once a machine has moved past "planned" -- completed
+  // machines show their real completion date, ones currently away show
+  // their arrival date (plus a tentative completion if the sheet gave one).
+  let progress = '';
+  if (e.status === 'Completed' && e.completionDate) progress = ` &bull; completed ${esc(e.completionDate)}`;
+  else if (e.status === 'Ongoing / Under Attention' && e.arrivalDate) progress = ` &bull; arrived ${esc(e.arrivalDate)}${e.tentative?(', expected ~'+esc(e.tentative)):''}`;
+  return `<li><b>${esc(e.machine)}</b> &mdash; ${esc(e.type||'')} scheduled <b>${esc(e.month||'—')}</b>${e.location?(' at '+esc(e.location)):''}${e.srden?(' &bull; '+esc(e.srden)):''} ${fleetStatusBadge(e.status)}${od}${progress}</li>`;
 }
 function flFutureEventBulletHtml(e){
   return `<li><b>${esc(e.machine)}</b> &mdash; ${esc(e.type||'')} <b>${esc(e.kind||'')}</b> due <b>${esc(e.month||'—')}</b>${e.srden?(' &bull; '+esc(e.srden)):''}</li>`;
@@ -3984,11 +4016,12 @@ function flFutureEventBulletHtml(e){
 // DATA.fleet.iohPohSchedule.currentYear -- never the generic shortfall/
 // exceptions bundle the shared renderSrdenBannerInto() defaults to.
 // ---------------------------------------------------------------------
-const FL_RELEASE_PENDING_STATUSES = ['Yet to Release from Division', 'Ongoing / Under Attention', 'Due for Release', 'Overdue for Release'];
-// ^ 'Overdue for Release' added 08-Oct-2026 -- fixes the bug where the banner showed near-zero
-//   pending machines (e.g. "UBL Sr.DEN/W: 0 pending") because 23 of ~33 actionable machines carry
-//   an "Overdue by N months" remark that classify_iohpoh_status() now maps to this status, but this
-//   client-side list hadn't been updated to treat it as pending-release until now.
+const FL_RELEASE_PENDING_STATUSES = ['Ongoing / Under Attention', 'Overdue for Release'];
+// ^ Updated 26-Nov-2026 for the rebuilt Completed/Ongoing/Overdue/Upcoming vocabulary (replacing the
+//   old Yet-to-Release/Due-for-Release/Scheduled one -- see ioh_poh_planning.py's extract_current_year_
+//   progress()). 'Upcoming' is deliberately excluded here -- those machines aren't due yet, so they
+//   don't belong in a Sr.DEN release-nudge message; only 'Ongoing / Under Attention' (already away,
+//   still being worked on) and 'Overdue for Release' (should already have gone and hasn't) are.
 function flOverdueSortEvents(evs){
   // Most-overdue-first, since these are now the dashboard's top release priority; machines with no
   // overdueMonths value (not yet overdue, just scheduled/due) sort after, by their usual month order.
@@ -4057,14 +4090,12 @@ function flCurrentYearTabHtml(div){
   let html = statRow([
     {l:'Total', v: evs.length},
     {l:'Completed', v: sc['Completed']||0, cls:'good'},
-    {l:'Ongoing', v: sc['Ongoing / Under Attention']||0},
-    {l:'Yet to Release', v: sc['Yet to Release from Division']||0, cls:'warn'},
-    {l:'Due for Release', v: sc['Due for Release']||0, cls:'warn'},
-    {l:'Overdue', v: sc['Overdue for Release']||0, cls: (sc['Overdue for Release']||0)>0?'bad':'good'},
-    {l:'Scheduled', v: sc['Scheduled']||0},
+    {l:'Ongoing / Under Attention', v: sc['Ongoing / Under Attention']||0},
+    {l:'Overdue for Release', v: sc['Overdue for Release']||0, cls: (sc['Overdue for Release']||0)>0?'bad':'good'},
+    {l:'Upcoming', v: sc['Upcoming']||0},
   ]);
   html += dcard(`FY ${esc(cy.fy||'26-27')} Schedule &mdash; ${esc(FL_DIV_LABEL[div]||div)}`,
-    `From ${esc(cy.source||'the Dy.CE/TM letter')}${cy.letterDate?(', dated '+esc(cy.letterDate)):''} &bull; ${evs.length} machine(s)`,
+    `From ${esc(cy.source||'the Progress 2026-27 sheet')}${cy.letterDate?(', dated '+esc(cy.letterDate)):''} &bull; ${evs.length} machine(s)`,
     evs.length? `<ul class="dbullets">${evs.map(flCurrentEventBulletHtml).join('')}</ul>` : '<div class="dcap" style="margin-top:0;">No current-FY events for this division.</div>');
   return html;
 }
@@ -4136,11 +4167,11 @@ function renderFlKpis(){
   // completedPOHCount in the pipeline, which must sum to completedCount).
   const kpis = [
     {l:'Total Fleet', v: DATA.meta.fleetSize, hint:'all SWR track machines', fn:()=>{ const el=document.getElementById('flAgeChart'); if (el) el.scrollIntoView({behavior:'smooth', block:'center'}); }},
-    {l:`Planned This Year`, v: cy.totalCount, hint:`FY ${esc(cy.fy||'26-27')} &bull; Dy.CE/TM letter`, fn:()=>openFleetStatusDrawer(null)},
-    {l:'Due for Release', v: cy.yetToReleaseCount, hint:'yet to release from division', cls:'warn', fn:()=>openFleetStatusDrawer('Yet to Release from Division')},
+    {l:`Planned This Year`, v: cy.totalCount, hint:`FY ${esc(cy.fy||'26-27')} &bull; Progress 2026-27 sheet`, fn:()=>openFleetStatusDrawer(null)},
+    {l:'Overdue for Release', v: cy.overdueCount, hint:'planned month has passed, still not released', cls:'bad', fn:()=>openFleetStatusDrawer('Overdue for Release')},
     {l:'Completed', v: cy.completedCount, hint:`IOH ${cy.completedIOHCount??0} &bull; POH ${cy.completedPOHCount??0}`, cls:'good', fn:()=>openFleetStatusDrawer('Completed')},
-    {l:'Ongoing / Under Attention', v: (cy.statusCounts['Ongoing / Under Attention']||0), hint:'currently at CPOH/RYP or STMRD', fn:()=>openFleetStatusDrawer('Ongoing / Under Attention')},
-    {l:'Scheduled / Upcoming', v: cy.scheduledCount, hint:'not yet due', fn:()=>openFleetStatusDrawer('Scheduled')},
+    {l:'Ongoing / Under Attention', v: (cy.statusCounts['Ongoing / Under Attention']||0), hint:'currently at CPOH/RYP, ZBD/YPR or STMRD', fn:()=>openFleetStatusDrawer('Ongoing / Under Attention')},
+    {l:'Upcoming', v: cy.upcomingCount, hint:'not yet due', fn:()=>openFleetStatusDrawer('Upcoming')},
   ];
   row.innerHTML = kpis.map(k=>`<div class="kpi"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="hint">${k.hint||''}</div></div>`).join('');
   Array.from(row.querySelectorAll('.kpi')).forEach((el,i)=> el.addEventListener('click', kpis[i].fn));
@@ -4171,46 +4202,13 @@ function renderFlDivGrid(){
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
         ${sc['Completed']?`<span class="dbadge good">${sc['Completed']} completed</span>`:''}
         ${sc['Ongoing / Under Attention']?`<span class="dbadge accent">${sc['Ongoing / Under Attention']} ongoing</span>`:''}
-        ${sc['Yet to Release from Division']?`<span class="dbadge warn">${sc['Yet to Release from Division']} yet to release</span>`:''}
-        ${sc['Scheduled']?`<span class="dbadge">${sc['Scheduled']} scheduled</span>`:''}
+        ${sc['Overdue for Release']?`<span class="dbadge bad">${sc['Overdue for Release']} overdue for release</span>`:''}
+        ${sc['Upcoming']?`<span class="dbadge">${sc['Upcoming']} upcoming</span>`:''}
       </div>
       <div class="dcap" style="margin-top:8px; margin-bottom:0;">Click for the bulleted schedule &amp; Sr.DEN breakdown &rarr;</div>
     </div>`;
   }).join('');
   Array.from(grid.querySelectorAll('[data-div]')).forEach(card=> card.addEventListener('click', ()=>openFleetDivisionDrawer(card.dataset.div, 0)));
-}
-function renderFlPriorityList(){
-  const host = document.getElementById('flPriorityList');
-  if (!host) return;
-  const s = DATA.fleet.iohPohSchedule;
-  const cy = s && s.currentYear;
-  const rows = (cy && cy.priorityEvents) || [];
-  if (!rows.length){ host.innerHTML = '<div class="emptynote">No priority-release entries on record.</div>'; return; }
-  const byDiv = {};
-  rows.forEach(r=>{ (byDiv[r.division||'Unassigned']=byDiv[r.division||'Unassigned']||[]).push(r); });
-  host.innerHTML = Object.keys(byDiv).sort().map(div=>
-    dcard(`${FL_DIV_LABEL[div]||div}`, `${byDiv[div].length} machine(s)`,
-      `<ul class="dbullets">${byDiv[div].map(r=>`<li><b>${esc(r.machine)}</b> &mdash; planned ${esc(r.plannedDate||'—')} ${fleetStatusBadge(r.status)}${r.srden?(' &bull; '+esc(r.srden)):''}</li>`).join('')}</ul>`)
-  ).join('');
-}
-// Added 01-Oct-2026, mirroring renderFlPriorityList above per the user's ask
-// ("like POH priority, make one IOH priority also"). No standalone IOH
-// priority letter exists in the source folder, so this is derived from the
-// main current-year schedule (iohPriorityEvents in the pipeline) rather than
-// a separate table — see the comment there for why.
-function renderFlIohPriorityList(){
-  const host = document.getElementById('flIohPriorityList');
-  if (!host) return;
-  const s = DATA.fleet.iohPohSchedule;
-  const cy = s && s.currentYear;
-  const rows = (cy && cy.iohPriorityEvents) || [];
-  if (!rows.length){ host.innerHTML = '<div class="emptynote">No IOH machines currently yet-to-release or under attention.</div>'; return; }
-  const byDiv = {};
-  rows.forEach(r=>{ (byDiv[r.division||'Unassigned']=byDiv[r.division||'Unassigned']||[]).push(r); });
-  host.innerHTML = Object.keys(byDiv).sort().map(div=>
-    dcard(`${FL_DIV_LABEL[div]||div}`, `${byDiv[div].length} machine(s)`,
-      `<ul class="dbullets">${flSortEvents(byDiv[div]).map(r=>`<li><b>${esc(r.machine)}</b> &mdash; tentative <b>${esc(r.month||'—')}</b> ${fleetStatusBadge(r.status)}${r.srden?(' &bull; '+esc(r.srden)):''}</li>`).join('')}</ul>`)
-  ).join('');
 }
 function openFleetScheduleSourceDrawer(){
   const s = DATA.fleet.iohPohSchedule;
@@ -4232,8 +4230,6 @@ function setupFleetTable(){
   renderFlKpis();
   renderFlAgeChart();
   renderFlDivGrid();
-  renderFlPriorityList();
-  renderFlIohPriorityList();
   const srcBtn = document.getElementById('flSourceBtn');
   if (srcBtn && !srcBtn._wired){ srcBtn._wired = true; srcBtn.addEventListener('click', openFleetScheduleSourceDrawer); }
 }
@@ -5077,13 +5073,11 @@ function drawFleetCharts(){
     messageFn: buildFleetSrdenMessage,
     openFn: openFleetSrdenDrawer,
   });
-  // Multi-Year IOH/POH Outlook + Service Norms (FY 2027-30) -- moved here from
-  // Infrastructure Planning on 12-Oct-2026 per the user's request; renderInfraIohPohFutureGrid()/
-  // renderInfraIohPohNormsTable() are defined further down the file (function declarations
-  // hoist, so these calls are safe). Independent of the current-FY letter above, so drawn
-  // unconditionally, same as before.
+  // Multi-Year IOH/POH Outlook (FY 2027-30) -- moved here from Infrastructure
+  // Planning on 12-Oct-2026 per the user's request; renderInfraIohPohFutureGrid()
+  // is defined further down the file (function declarations hoist, so this call
+  // is safe). Independent of the current-FY schedule above, so drawn unconditionally.
   renderInfraIohPohFutureGrid();
-  renderInfraIohPohNormsTable();
   // CPOH/RYP Central POH Planning (FY 2027-30) -- moved here from Infrastructure
   // Planning on 08-Oct-2026 per the user's request; drawCpohPlanning() itself is
   // defined further down the file (function declarations hoist, so this call is safe).
@@ -6422,14 +6416,15 @@ function renderInfraIohPohFutureGrid(){
   }).join('');
   Array.from(grid.querySelectorAll('[data-div]')).forEach(card=> card.addEventListener('click', ()=>openInfraIohPohFutureDrawer(card.dataset.div)));
 }
-function renderInfraIohPohNormsTable(){
-  const tbody = document.querySelector('#infraIohPohNormsTable tbody');
-  if (!tbody) return;
+// Replaced the standalone "IOH/POH Service Norms (Reference)" table card
+// with this lookup on 26-Nov-2026 per Shruti ("you can save it for your
+// reference... Chart is not required to be displayed. Whenever I click
+// the data for a particular machine which has been planned, you can just
+// show it there"). Used by openMachineDetailDrawer()'s IOH/POH card, not
+// rendered as its own table anywhere.
+function iohPohNormFor(typeCode){
   const norms = (DATA.fleet.iohPohSchedule && DATA.fleet.iohPohSchedule.norms) || [];
-  tbody.innerHTML = norms.map(n=>`<tr>
-    <td>${esc(n.type)}</td><td class="num">${n.iohDays??'—'}</td><td class="num">${n.firstPohDays??'—'}</td>
-    <td class="num">${n.subsequentPohDays??'—'}</td><td class="num">${n.iohHrs??'—'}</td><td>${esc(n.pohHrs??'—')}</td>
-  </tr>`).join('') || `<tr><td colspan="6"><div class="emptynote">No norms data found.</div></td></tr>`;
+  return norms.find(n=> n.type===typeCode) || null;
 }
 
 // ---------------------------------------------------------------------
@@ -6451,7 +6446,7 @@ function renderCpohKpiRow(){
   row.innerHTML = kpis.map(k=>`<div class="kpi"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="hint">${k.hint||''}</div></div>`).join('');
   Array.from(row.querySelectorAll('.kpi')).forEach((el,i)=> el.addEventListener('click', kpis[i].fn));
   const cap = document.getElementById('cpohHeaderCap');
-  if (cap && cp.letterDate) cap.textContent = `Dy.CE/TM's own forward proposal to Dy.CE/CPOH/RYP, dated ${cp.letterDate} • the current year's CPOH/RYP release status is in the "POH Release Priority List — CPOH/RYP" card above`;
+  if (cap && cp.letterDate) cap.textContent = `Dy.CE/TM's own forward proposal to Dy.CE/CPOH/RYP, dated ${cp.letterDate} • the current year's CPOH/RYP release status is in the "Division-wise FY 2026-27 Schedule" card above`;
 }
 function renderCpohProposedTable(){
   const tbody = document.querySelector('#cpohProposedTable tbody');
