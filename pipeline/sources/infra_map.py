@@ -303,6 +303,12 @@ def build_infra_map(payload, rdps_by_div, supplement):
         geo = _resolve_geo(d.get('station'), stations_geo)
         depots.append(dict(d, lat=geo['lat'] if geo else None, lon=geo['lon'] if geo else None))
 
+    # ---- Track polylines, reused directly from the Network Map tab's own
+    # builder (same live rdps_by_div input is already passed in here) --
+    # added 26-Nov-2026 per Shruti's feature-parity request so the Infra
+    # map shows the actual route alignment, not just bare station dots.
+    tracks_by_div = network_map.build_tracks_from_rdps(rdps_by_div)
+
     return dict(
         asOf=ms.get('asOf') or payload.get('masterSummary', {}).get('asOf'),
         kpi=dict(
@@ -318,4 +324,6 @@ def build_infra_map(payload, rdps_by_div, supplement):
         srdenBreakdown=srden_breakdown,
         divisionRollup=division_rollup,
         divLabel=DIV_LABEL,
+        tracksByDiv=tracks_by_div,
+        divColor=network_map.DIV_COLOR,
     )
