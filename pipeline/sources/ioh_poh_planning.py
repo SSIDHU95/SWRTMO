@@ -240,7 +240,11 @@ def extract_current_year_progress(payload, as_of=None):
             if not machine:
                 continue
             div_raw = _g(r, 'Belongs to DIV', 'Parent Division')
-            div_clean = div_raw if div_raw in ('MYS', 'SBC', 'UBL') else None
+            # .strip() added 26-Nov-2026: a stray trailing space in a real row
+            # ("UBL " for MPT-56967 in Shruti's reorganized sheet) was failing
+            # this exact-match check and silently dropping that machine's
+            # division to None -- confirmed against her real re-uploaded file.
+            div_clean = div_raw.strip() if isinstance(div_raw, str) and div_raw.strip() in ('MYS', 'SBC', 'UBL') else None
             planned_at = _g(r, 'Attend at', 'Planned At')
             month_raw = _g(r, 'Actually planned', 'Month of Planning')
             arrival_raw = _g(r, 'FROM', 'Date of Arrival of machine to depot')
