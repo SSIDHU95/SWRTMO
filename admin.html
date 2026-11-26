@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAMARTH — Admin Portal</title>
+<style>
+  :root{
+    --navy:#0F172A; --navy-2:#020617; --steel:#4F46E5; --steel-2:#6366F1;
+    --bg:#F8FAFC; --surface:#FFFFFF; --surface-2:#F1F5F9; --border:rgba(15,23,42,.08);
+    --text:#0F172A; --muted:#64748B; --faint:#94A3B8;
+    --good:#059669; --good-bg:#ECFDF5; --warn:#D97706; --warn-bg:#FFFBEB;
+    --bad:#E11D48; --bad-bg:#FFF1F2; --accent:#4F46E5;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.04); --shadow-md:0 4px 14px rgba(15,23,42,.08);
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:var(--sans); -webkit-font-smoothing:antialiased;}
+  header.top{background:var(--navy); color:#fff; padding:16px 24px; display:flex; align-items:center; justify-content:space-between;}
+  header.top .brand{display:flex; align-items:baseline; gap:10px;}
+  header.top h1{font-size:19px; margin:0; font-weight:800; letter-spacing:.01em;}
+  header.top .tag{font-size:11.5px; color:#CBD5E1; font-weight:500;}
+  header.top .who{font-size:12.5px; color:#CBD5E1;}
+  button{font-family:var(--sans); cursor:pointer;}
+  .btn{border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600;}
+  .btn:hover{background:var(--surface-2);}
+  .btn:disabled{opacity:.5; cursor:default;}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.primary:hover{background:#4338CA;}
+  .btn.ghost{background:transparent; border-color:transparent; color:#CBD5E1;}
+  .btn.ghost:hover{background:rgba(255,255,255,.08);}
+  .btn.danger{color:var(--bad); border-color:rgba(225,29,72,.3);}
+  .btn.small{padding:5px 10px; font-size:12px;}
+  main{max-width:1080px; margin:0 auto; padding:28px 20px 80px;}
+  .navtabs{display:flex; gap:4px; margin-bottom:22px; border-bottom:1px solid var(--border);}
+  .navtabs button{border:none; background:transparent; padding:10px 16px; font-size:14px; font-weight:600; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px;}
+  .navtabs button.active{color:var(--accent); border-bottom-color:var(--accent);}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px; box-shadow:var(--shadow-sm); margin-bottom:18px;}
+  .card h2{font-size:15px; margin:0 0 4px; font-weight:800;}
+  .card .sub{font-size:12.5px; color:var(--muted); margin-bottom:16px;}
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); font-weight:700; padding:8px 10px; border-bottom:1px solid var(--border);}
+  td{padding:10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .pill{display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700;}
+  .pill.admin{background:#EEF2FF; color:#4338CA;}
+  .pill.viewer{background:var(--surface-2); color:var(--muted);}
+  .pill.never{background:var(--surface-2); color:var(--faint);}
+  .pill.banned{background:var(--bad-bg); color:var(--bad);}
+  .muted{color:var(--muted); font-size:12.5px;}
+  .row-actions{display:flex; gap:6px; flex-wrap:wrap;}
+  .topline{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;}
+  .toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--navy); color:#fff; padding:12px 20px; border-radius:10px; font-size:13.5px; font-weight:600; box-shadow:var(--shadow-md); opacity:0; pointer-events:none; transition:all .25s ease; z-index:500; max-width:80vw;}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .toast.err{background:var(--bad);}
+
+  #loginScreen{min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--navy-2);}
+  .loginBox{background:var(--surface); border-radius:16px; padding:36px 34px; width:340px; box-shadow:var(--shadow-md);}
+  .loginBox h1{font-size:18px; margin:0 0 2px;}
+  .loginBox .sub{font-size:12.5px; color:var(--muted); margin-bottom:22px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:5px;}
+  .field input, .field select{width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:8px; font-size:13.5px; font-family:var(--sans);}
+  .loginBox button{width:100%; margin-top:6px;}
+  .loginErr{color:var(--bad); font-size:12.5px; margin:-6px 0 12px; display:none;}
+  .denied{text-align:center; padding:60px 20px; color:#fff;}
+  .denied .x{font-size:40px;}
+  #loadingNote{color:#94A3B8; text-align:center; padding-top:40px; font-size:13px;}
+
+  .overlay{position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; z-index:300;}
+  .overlay.show{display:flex;}
+  .modal{background:var(--surface); border-radius:16px; width:100%; max-width:560px; padding:0; box-shadow:var(--shadow-md); max-height:calc(100vh - 80px); display:flex; flex-direction:column;}
+  .modal .mhead{padding:18px 22px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
+  .modal .mhead h3{margin:0; font-size:15.5px;}
+  .modal .mbody{padding:18px 22px; overflow:auto;}
+  .modal .mfoot{padding:16px 22px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px;}
+  .close-x{border:none; background:transparent; font-size:18px; color:var(--muted); line-height:1;}
+
+  .tabrow{border:1px solid var(--border); border-radius:10px; margin-bottom:8px; overflow:hidden;}
+  .tabrow-head{display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface-2); cursor:pointer;}
+  .tabrow-head.nowidgets{cursor:default;}
+  .tabrow-head .chev{font-size:11px; color:var(--muted); transition:transform .15s;}
+  .tabrow-head.open .chev{transform:rotate(90deg);}
+  .tabrow-head .tname{font-size:13.5px; font-weight:700; flex:1;}
+  .tabrow-head .count{font-size:11.5px; color:var(--muted);}
+  .widgets{display:none; padding:4px 12px 10px 38px;}
+  .widgets.open{display:block;}
+  .wline{display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; color:var(--text);}
+  .wline input, .tabrow-head input{width:15px; height:15px; accent-color:var(--accent);}
+  .selall{font-size:11.5px; color:var(--accent); font-weight:700; background:none; border:none; margin-left:auto;}
+  .soon{font-size:11px; color:var(--faint); font-style:italic; padding:4px 12px 10px 38px;}
+
+  #app{display:none;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="loginBox">
+    <h1>SAMARTH — Admin Portal</h1>
+    <div class="sub">Sign in with the same account you use on the main dashboard. Only accounts marked as admin can get in here.</div>
+    <div class="loginErr" id="loginErr"></div>
+    <form id="loginForm">
+      <div class="field"><label>Email</label><input id="le" type="email" required></div>
+      <div class="field"><label>Password</label><input id="lp" type="password" required></div>
+      <button class="btn primary" type="submit" id="loginBtn">Sign in</button>
+    </form>
+    <div id="loadingNote" style="display:none; color:var(--muted);">Checking your session…</div>
+  </div>
+</div>
+
+<div id="deniedScreen" style="display:none; min-height:100vh; background:var(--navy-2);">
+  <div class="denied">
+    <div class="x">🔒</div>
+    <h2>Not an admin account</h2>
+    <p class="muted" style="color:#94A3B8;">This sign-in works, but this account isn't marked as an admin, so it can't open this page.<br>Only the main dashboard is available to it.</p>
+    <button class="btn" onclick="signOutAndReload()">Back</button>
+  </div>
+</div>
+
+<div id="app">
+  <header class="top">
+    <div class="brand"><h1>SAMARTH <span class="tag">— Admin Portal</span></h1></div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <span class="who" id="whoAmI"></span>
+      <button class="btn ghost" onclick="signOutAndReload()">Sign out</button>
+    </div>
+  </header>
+  <main>
+    <div class="navtabs">
+      <button class="active" data-pane="users" onclick="showPane('users',this)">Users &amp; Access</button>
+      <button data-pane="log" onclick="showPane('log',this)">Login Activity</button>
+    </div>
+
+    <div id="pane-users">
+      <div class="card">
+        <div class="topline">
+          <div><h2>Logins on this dashboard</h2>
+            <div class="sub" style="margin-bottom:0;">Create new logins here, and control exactly what each person can see.</div></div>
+          <button class="btn primary" onclick="openCreateModal()">+ New Login</button>
+        </div>
+        <table style="margin-top:14px;">
+          <thead><tr><th>Name / Email</th><th>Role</th><th>Last sign-in</th><th>Access</th><th></th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="pane-log" style="display:none;">
+      <div class="card">
+        <h2>Login activity</h2>
+        <div class="sub">Every successful sign-in on the main dashboard, newest first.</div>
+        <table>
+          <thead><tr><th>Email</th><th>Signed in at</th></tr></thead>
+          <tbody id="logBody"><tr><td colspan="2" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="createOverlay">
+  <div class="modal">
+    <div class="mhead"><h3>Create a new login</h3><button class="close-x" onclick="closeModal('createOverlay')">✕</button></div>
+    <div class="mbody">
+      <div class="field"><label>Email</label><input id="newEmail" type="email" placeholder="person@example.com"></div>
+      <div class="field">
+        <label>Temporary password</label>
+        <div style="display:flex; gap:8px;">
+          <input id="newPass" placeholder="auto-generated">
+          <button class="btn small" type="button" onclick="genPass()">Generate</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Role</label>
+        <select id="newRole"><option value="viewer">Viewer (normal dashboard access)</option><option value="admin">Admin (can also open this portal)</option></select>
+      </div>
+      <div class="muted">By default a new login starts with every tab and card switched off. Open "Manage access" right after creating it to turn on what this person should see.</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn" onclick="closeModal('createOverlay')">Cancel</button>
+      <button class="btn primary" id="createBtn" onclick="createUser()">Create login</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="accessOverlay">
+  <div class="modal" style="max-width:620px;">
+    <div class="mhead">
+      <div><h3 id="accessUserName">Manage access</h3><div class="muted" id="accessUserEmail"></div></div>
+      <button class="close-x" onclick="closeModal('accessOverlay')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="muted" style="margin-bottom:12px;">Everything starts switched off. Tick a tab to let this person see it at all; a few tabs can also be opened up to pick individual cards.</div>
+      <div id="tabChecklist"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn" onclick="closeModal('accessOverlay')">Cancel</button>
+      <button class="btn primary" id="saveAccessBtn" onclick="saveAccess()">Save access</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// ============================================================
+// Same Supabase project as the main dashboard (index.html) -- this is
+// the anon key, same as there; it's meant to be public, and every
+// privileged action below is still checked server-side (see the
+// admin-users Edge Function) before it's allowed to do anything.
+// ============================================================
+const SUPABASE_URL = 'https://efssxxtgerkijenfyzlk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmc3N4eHRnZXJraWplbmZ5emxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0ODAxNTQsImV4cCI6MjEwNzA1NjE1NH0.lkL7lPtxRFjkaQpA7TJqZi4g_0d-zE_YXoSpVx4G88Q';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const EDGE_FN_URL = SUPABASE_URL + '/functions/v1/admin-users';
+
+// Tab manifest -- keep in sync with the tab keys used by index.html's
+// own #tabNav, and with the widget ids actually wired into its render
+// functions. `widgets: null` means "not wired up for per-card control
+// yet" -- the admin portal only offers a single on/off toggle for that
+// whole tab until it's extended (see project-status.md).
+const TABS = [
+  {key:'overview', label:'Overview', widgets:null},
+  {key:'progress', label:'Progress vs Target', widgets:null},
+  {key:'shortfall', label:'Reason for Shortfall', widgets:null},
+  {key:'exceptions', label:'Exceptions & Downtime', widgets:null},
+  {key:'doubleshift', label:'Double-Shift Roster', widgets:null},
+  {key:'fleet', label:'Fleet Health', widgets:[
+    {id:'overviewKpis', label:'Fleet Health — IOH/POH Release overview (KPI row)'},
+    {id:'ageDistribution', label:'Fleet Age Distribution'},
+    {id:'divisionSchedule', label:'Division-wise — FY 2026-27 Schedule'},
+    {id:'multiYearOutlook', label:'Multi-Year IOH/POH Outlook, FY 2027-30'},
+    {id:'cpohRyp', label:'CPOH/RYP — Central POH Planning'},
+  ]},
+  {key:'actionplan53', label:'53-Point Action Plan', widgets:null},
+  {key:'unitcost', label:'Unit Cost', widgets:null},
+  {key:'infra', label:'Infrastructure Planning', widgets:[
+    {id:'overviewKpis', label:'Infrastructure Planning overview (KPI row)'},
+    {id:'map', label:'Sidings, Rest Houses & Satellite Depots — Map'},
+    {id:'unplacedList', label:'Not mapped yet (list)'},
+    {id:'srdenBreakdown', label:'Sr.DEN-wise Breakdown'},
+    {id:'divisionGrid', label:'By-Division detail cards'},
+  ]},
+  {key:'tenders', label:'Tenders & Contracts', widgets:null},
+  {key:'indent', label:'Indent Position', widgets:null},
+  {key:'livesources', label:'Live Data Sources', widgets:null},
+];
+
+let usersCache = [];
+let permsCache = {};   // user_id -> {tabs:[], widgets:{}}
+let adminIdSet = new Set();
+let editingUserId = null;
+let meIsAdmin = false;
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!isErr);
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), 3800);
+}
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function showLoginErr(msg){ const e=document.getElementById('loginErr'); e.textContent=msg; e.style.display='block'; }
+function hideLoginErr(){ document.getElementById('loginErr').style.display='none'; }
+
+async function callAdminFn(action, payload){
+  const { data: sess } = await sb.auth.getSession();
+  const token = sess && sess.session && sess.session.access_token;
+  if (!token) throw new Error('Not signed in.');
+  const res = await fetch(EDGE_FN_URL, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({action}, payload||{})),
+  });
+  const body = await res.json().catch(()=>({error:'Unexpected response from the server.'}));
+  if (!res.ok || body.error) throw new Error(body.error || ('Request failed (' + res.status + ')'));
+  return body;
+}
+
+async function checkAdminAndEnter(){
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user){ document.getElementById('loginScreen').style.display='flex'; return; }
+  const { data: adminRow } = await sb.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle();
+  document.getElementById('loginScreen').style.display='none';
+  if (!adminRow){
+    document.getElementById('deniedScreen').style.display='block';
+    return;
+  }
+  meIsAdmin = true;
+  document.getElementById('app').style.display='block';
+  document.getElementById('whoAmI').textContent = user.email + ' (admin)';
+  await loadUsers();
+  await loadLog();
+}
+
+function signOutAndReload(){ sb.auth.signOut().then(()=>window.location.reload()); }
+
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  hideLoginErr();
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try{
+    const { error } = await sb.auth.signInWithPassword({
+      email: document.getElementById('le').value.trim(),
+      password: document.getElementById('lp').value,
+    });
+    if (error) throw error;
+    await checkAdminAndEnter();
+  }catch(err){
+    showLoginErr(err && err.message ? err.message : 'Sign-in failed.');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+});
+
+function showPane(name, btn){
+  document.querySelectorAll('.navtabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-users').style.display = name==='users' ? '' : 'none';
+  document.getElementById('pane-log').style.display = name==='log' ? '' : 'none';
+}
+
+function countAccess(uid){
+  const p = permsCache[uid] || {tabs:[], widgets:{}};
+  const nTabs = (p.tabs||[]).length;
+  let nW = 0;
+  TABS.forEach(t=>{ if (t.widgets) nW += ((p.widgets||{})[t.key]||[]).length; });
+  return {nTabs, nW};
+}
+
+async function loadUsers(){
+  try{
+    const [listRes, permsRes, adminsRes] = await Promise.all([
+      callAdminFn('list'),
+      sb.from('user_permissions').select('*'),
+      sb.from('admin_users').select('user_id'),
+    ]);
+    usersCache = listRes.users || [];
+    permsCache = {};
+    (permsRes.data||[]).forEach(r=>{ permsCache[r.user_id] = {tabs:r.tabs||[], widgets:r.widgets||{}}; });
+    adminIdSet = new Set((adminsRes.data||[]).map(r=>r.user_id));
+    renderUsers();
+  }catch(err){
+    document.getElementById('usersBody').innerHTML = `<tr><td colspan="5" class="muted">Could not load: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+async function loadLog(){
+  try{
+    const { data, error } = await sb.from('login_log').select('*').order('logged_in_at', {ascending:false}).limit(200);
+    if (error) throw error;
+    const body = document.getElementById('logBody');
+    body.innerHTML = (data||[]).length
+      ? data.map(l=>`<tr><td>${esc(l.email||'—')}</td><td class="muted">${esc(l.logged_in_at)}</td></tr>`).join('')
+      : '<tr><td colspan="2" class="muted">No sign-ins recorded yet.</td></tr>';
+  }catch(err){
+    document.getElementById('logBody').innerHTML = `<tr><td colspan="2" class="muted">Could not load: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function renderUsers(){
+  const body = document.getElementById('usersBody');
+  if (!usersCache.length){ body.innerHTML = '<tr><td colspan="5" class="muted">No logins yet.</td></tr>'; return; }
+  body.innerHTML = usersCache.map(u=>{
+    const isAdmin = adminIdSet.has(u.id);
+    const last = u.last_sign_in_at ? esc(new Date(u.last_sign_in_at).toLocaleString()) : '<span class="pill never">Never signed in</span>';
+    const roleP = isAdmin ? '<span class="pill admin">Admin</span>' : '<span class="pill viewer">Viewer</span>';
+    const banP = u.banned ? ' <span class="pill banned">Deactivated</span>' : '';
+    const {nTabs, nW} = countAccess(u.id);
+    const deactivateBtn = u.banned
+      ? `<button class="btn small" onclick="reactivate('${u.id}')">Reactivate</button>`
+      : `<button class="btn small danger" onclick="deactivate('${u.id}','${esc(u.email)}')">Deactivate</button>`;
+    return `<tr>
+      <td><div style="font-weight:700;">${esc(u.email)}</div></td>
+      <td>${roleP}${banP}</td>
+      <td>${last}</td>
+      <td>${nTabs} tab(s), ${nW} card(s) on</td>
+      <td><div class="row-actions">
+        <button class="btn small" onclick="openAccessModal('${u.id}')">Manage access</button>
+        <button class="btn small" onclick="resetPw('${esc(u.email)}')">Reset password</button>
+        ${deactivateBtn}
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function deactivate(id, email){
+  if (!confirm(`Deactivate ${email}'s login? They won't be able to sign in until you reactivate it.`)) return;
+  try{ await callAdminFn('deactivate', {userId:id}); toast('Login deactivated.'); await loadUsers(); }
+  catch(err){ toast(err.message, true); }
+}
+async function reactivate(id){
+  try{ await callAdminFn('reactivate', {userId:id}); toast('Login reactivated.'); await loadUsers(); }
+  catch(err){ toast(err.message, true); }
+}
+async function resetPw(email){
+  try{ await callAdminFn('reset_password', {email}); toast(`Password-reset email sent to ${email}.`); }
+  catch(err){ toast(err.message, true); }
+}
+
+function openCreateModal(){
+  document.getElementById('newEmail').value='';
+  document.getElementById('newPass').value='';
+  document.getElementById('newRole').value='viewer';
+  document.getElementById('createOverlay').classList.add('show');
+}
+function genPass(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let p=''; for(let i=0;i<10;i++) p+=chars[Math.floor(Math.random()*chars.length)];
+  document.getElementById('newPass').value = p;
+}
+async function createUser(){
+  const email = document.getElementById('newEmail').value.trim();
+  const password = document.getElementById('newPass').value.trim();
+  const role = document.getElementById('newRole').value;
+  if (!email || !password){ toast('Fill in an email and a password first.', true); return; }
+  const btn = document.getElementById('createBtn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try{
+    const { user } = await callAdminFn('create', {email, password});
+    await sb.from('user_permissions').insert({user_id: user.id, tabs: [], widgets: {}});
+    if (role === 'admin') await sb.from('admin_users').insert({user_id: user.id});
+    closeModal('createOverlay');
+    toast(`Login created for ${email}. Share this temporary password with them securely — they can sign in right away.`);
+    await loadUsers();
+  }catch(err){
+    toast(err.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Create login';
+  }
+}
+
+function openAccessModal(id){
+  editingUserId = id;
+  const u = usersCache.find(x=>x.id===id);
+  const p = permsCache[id] || {tabs:[], widgets:{}};
+  document.getElementById('accessUserName').textContent = 'Manage access';
+  document.getElementById('accessUserEmail').textContent = u ? u.email : '';
+  const box = document.getElementById('tabChecklist');
+  box.innerHTML = TABS.map(t=>{
+    const tabOn = (p.tabs||[]).includes(t.key);
+    if (!t.widgets){
+      return `
+      <div class="tabrow" data-tab="${t.key}">
+        <div class="tabrow-head nowidgets">
+          <input type="checkbox" data-tabcheck="${t.key}" ${tabOn?'checked':''}>
+          <div class="tname">${esc(t.label)}</div>
+        </div>
+        <div class="soon">Per-card control isn't available for this tab yet — once it's on, everything in it shows.</div>
+      </div>`;
+    }
+    const checkedW = (p.widgets && p.widgets[t.key]) || [];
+    const someOn = checkedW.length > 0;
+    return `
+    <div class="tabrow" data-tab="${t.key}">
+      <div class="tabrow-head" onclick="toggleOpen(this)">
+        <input type="checkbox" data-tabcheck="${t.key}" ${someOn||tabOn?'checked':''} onclick="event.stopPropagation(); toggleWholeTab('${t.key}', this.checked)">
+        <div class="tname">${esc(t.label)}</div>
+        <div class="count">${checkedW.length} of ${t.widgets.length} cards on</div>
+        <span class="chev">▶</span>
+      </div>
+      <div class="widgets">
+        <button class="selall" type="button" onclick="selectAllWidgets('${t.key}', event)">select all</button>
+        ${t.widgets.map(w=>`<div class="wline"><input type="checkbox" data-tab="${t.key}" data-w="${esc(w.id)}" ${checkedW.includes(w.id)?'checked':''} onchange="syncTabCheckbox('${t.key}')"><span>${esc(w.label)}</span></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('accessOverlay').classList.add('show');
+}
+function toggleOpen(headEl){ headEl.classList.toggle('open'); headEl.nextElementSibling.classList.toggle('open'); }
+function toggleWholeTab(tabKey, checked){
+  const row = document.querySelector(`.tabrow[data-tab="${tabKey}"]`);
+  row.querySelectorAll('.widgets input[type=checkbox]').forEach(cb=>cb.checked = checked);
+  const all = row.querySelectorAll('.widgets input[type=checkbox]').length;
+  const onCount = checked ? all : 0;
+  const countEl = row.querySelector('.count');
+  if (countEl) countEl.textContent = `${onCount} of ${all} cards on`;
+}
+function selectAllWidgets(tabKey, ev){
+  ev.stopPropagation();
+  const row = document.querySelector(`.tabrow[data-tab="${tabKey}"]`);
+  row.querySelectorAll('.widgets input[type=checkbox]').forEach(cb=>cb.checked = true);
+  syncTabCheckbox(tabKey);
+}
+function syncTabCheckbox(tabKey){
+  const row = document.querySelector(`.tabrow[data-tab="${tabKey}"]`);
+  const all = row.querySelectorAll('.widgets input[type=checkbox]');
+  const on = [...all].filter(c=>c.checked).length;
+  row.querySelector(`input[data-tabcheck="${tabKey}"]`).checked = on>0;
+  row.querySelector('.count').textContent = `${on} of ${all.length} cards on`;
+}
+
+async function saveAccess(){
+  const tabs = [];
+  const widgets = {};
+  TABS.forEach(t=>{
+    const row = document.querySelector(`.tabrow[data-tab="${t.key}"]`);
+    const tabCb = row.querySelector(`input[data-tabcheck="${t.key}"]`);
+    if (t.widgets){
+      const checked = [...row.querySelectorAll('.widgets input[type=checkbox]:checked')].map(c=>c.dataset.w);
+      if (checked.length){ tabs.push(t.key); widgets[t.key] = checked; }
+    }else if (tabCb.checked){
+      tabs.push(t.key);
+    }
+  });
+  const btn = document.getElementById('saveAccessBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const { error } = await sb.from('user_permissions').upsert({
+      user_id: editingUserId, tabs, widgets, updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    permsCache[editingUserId] = {tabs, widgets};
+    closeModal('accessOverlay');
+    renderUsers();
+    toast(`Saved — this login can now see ${tabs.length} tab(s).`);
+  }catch(err){
+    toast(err.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save access';
+  }
+}
+
+// On load: if already signed in (session remembered by the browser),
+// skip straight to the admin check instead of asking to log in again.
+(async function init(){
+  document.getElementById('loadingNote').style.display = 'block';
+  try{
+    const { data } = await sb.auth.getSession();
+    if (data && data.session){
+      await checkAdminAndEnter();
+    }
+  }finally{
+    document.getElementById('loadingNote').style.display = 'none';
+  }
+})();
+</script>
+</body>
+</html>

@@ -9109,11 +9109,18 @@ function applyMotionPolish(root){
 
 document.getElementById('tabNav').addEventListener('click', e=>{
   const btn = e.target.closest('button'); if(!btn) return;
+  // Added 27-Nov-2026: a tab hidden by applyTabPermissions() (this
+  // account doesn't have it switched on) still exists in the DOM, so a
+  // cross-link elsewhere in the dashboard that does button.click() on it
+  // programmatically must not be able to switch into it either -- not
+  // just a real person clicking a button they can't see.
+  if (btn.style.display === 'none') return;
   document.querySelectorAll('#tabNav button').forEach(b=>b.classList.toggle('active', b===btn));
   document.querySelectorAll('section.module').forEach(s=>s.classList.toggle('active', s.id==='mod-'+btn.dataset.mod));
   currentModule = btn.dataset.mod;
   animateModuleEnter(document.getElementById('mod-'+currentModule));
   redrawCurrent();
+  applyWidgetPermissions();
 });
 
 // ---------------------------------------------------------------------
@@ -9236,6 +9243,132 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =====================================================================
+// Per-login access control (admin portal), added 27-Nov-2026 per
+// Shruti's request. MY_PERMS is this signed-in person's own permission
+// row ({tabs:[...], widgets:{...}}), fetched once right after sign-in.
+// MY_PERMS === null means "couldn't be loaded" (network hiccup, or this
+// account genuinely has no row yet because the one-time setup script
+// hasn't been run) -- that FAILS OPEN (shows everything) deliberately,
+// so a transient problem here can never lock everyone out of their own
+// dashboard. A successfully-loaded row with an empty tabs list is a
+// real, deliberate "nothing switched on yet" state, not a failure --
+// see admin_portal_setup.sql's one-time backfill, which is what gives
+// every CURRENT real login full access the moment this ships, so this
+// distinction only matters for a brand-new login an admin hasn't
+// configured yet.
+// =====================================================================
+let MY_PERMS = null;
+
+// Per-tab element ids this is wired up to enforce at the individual
+// card/section level. Only Fleet Health and Infrastructure Planning are
+// done so far (see project-status.md) -- every other tab key is simply
+// absent from this object, which widgetAllowed() below treats as "no
+// per-card control here yet, so show everything once the tab itself is
+// allowed." A widget id can map to more than one element id when that
+// one conceptual "card" the admin portal shows is actually built from
+// several separate <div class="card"> blocks in the markup (e.g.
+// CPOH/RYP's own header + 4 table cards) -- all of them are hidden or
+// shown together as one unit.
+const WIDGET_ELEMENT_IDS = {
+  fleet: {
+    overviewKpis: ['flKpiRow'],
+    ageDistribution: ['flAgeChart'],
+    divisionSchedule: ['flDivGrid'],
+    multiYearOutlook: ['infraIohPohFutureGrid'],
+    cpohRyp: ['cpohKpiRow', 'cpohProposedTable', 'cpohTentative2829Table', 'cpohTentative2930Table', 'cpohTampingTable'],
+  },
+  infra: {
+    overviewKpis: ['infraKpiRow'],
+    map: ['infraMap'],
+    unplacedList: ['infraMapUnplacedCard'],
+    srdenBreakdown: ['infraSrdenTable'],
+    divisionGrid: ['infraDivGrid'],
+  },
+};
+
+async function loadMyPermissions(){
+  try{
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user){ MY_PERMS = null; return; }
+    const { data, error } = await sb.from('user_permissions').select('tabs,widgets').eq('user_id', user.id).maybeSingle();
+    if (error) throw error;
+    MY_PERMS = data ? { tabs: data.tabs || [], widgets: data.widgets || {} } : { tabs: [], widgets: {} };
+  }catch(err){
+    console.warn('Could not load this account\'s access permissions -- showing everything:', err);
+    MY_PERMS = null;
+  }
+}
+
+function logMyLogin(){
+  // Best-effort only -- never blocks or breaks sign-in if this fails
+  // (e.g. the one-time setup script hasn't been run on this project yet).
+  sb.auth.getUser().then(({ data: { user } })=>{
+    if (!user) return;
+    sb.from('login_log').insert({ user_id: user.id, email: user.email }).then(({ error })=>{
+      if (error) console.warn('Could not record login activity:', error);
+    });
+  }).catch(()=>{});
+}
+
+function tabAllowed(modKey){
+  if (!MY_PERMS) return true; // fail open
+  return MY_PERMS.tabs.includes(modKey);
+}
+
+function widgetAllowed(modKey, widgetId){
+  if (!MY_PERMS) return true; // fail open
+  if (!MY_PERMS.tabs.includes(modKey)) return false;
+  const supported = WIDGET_ELEMENT_IDS[modKey];
+  if (!supported || !(widgetId in supported)) return true; // not wired up yet -- show it
+  return ((MY_PERMS.widgets || {})[modKey] || []).includes(widgetId);
+}
+
+function applyTabPermissions(){
+  if (!MY_PERMS) return;
+  const nav = document.getElementById('tabNav');
+  if (!nav) return;
+  let anyVisible = false, firstVisibleBtn = null;
+  nav.querySelectorAll('button[data-mod]').forEach(btn=>{
+    const ok = tabAllowed(btn.dataset.mod);
+    btn.style.display = ok ? '' : 'none';
+    if (ok){ anyVisible = true; if (!firstVisibleBtn) firstVisibleBtn = btn; }
+  });
+  let noAccessMsg = document.getElementById('noAccessMsg');
+  if (!anyVisible){
+    document.querySelectorAll('section.module').forEach(s=>s.classList.remove('active'));
+    if (!noAccessMsg){
+      noAccessMsg = document.createElement('div');
+      noAccessMsg.id = 'noAccessMsg';
+      noAccessMsg.style.cssText = 'max-width:640px;margin:60px auto;padding:28px;text-align:center;color:var(--muted);font-size:14px;';
+      noAccessMsg.textContent = "Your account doesn't have any tabs switched on yet. Contact your administrator to get access.";
+      nav.insertAdjacentElement('afterend', noAccessMsg);
+    }
+    noAccessMsg.style.display = '';
+    return;
+  }
+  if (noAccessMsg) noAccessMsg.style.display = 'none';
+  const activeBtn = nav.querySelector('button[data-mod].active');
+  if ((!activeBtn || activeBtn.style.display === 'none') && firstVisibleBtn){
+    firstVisibleBtn.click();
+  }
+}
+
+function applyWidgetPermissions(){
+  if (!MY_PERMS) return;
+  Object.keys(WIDGET_ELEMENT_IDS).forEach(modKey=>{
+    Object.keys(WIDGET_ELEMENT_IDS[modKey]).forEach(widgetId=>{
+      const ok = widgetAllowed(modKey, widgetId);
+      WIDGET_ELEMENT_IDS[modKey][widgetId].forEach(elId=>{
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const card = el.closest('.card') || el;
+        card.style.display = ok ? '' : 'none';
+      });
+    });
+  });
+}
+
+// =====================================================================
 // Auth gate: sign in with Supabase, fetch the latest payload row, then
 // reveal the dashboard. Nothing above touches DATA until it's loaded.
 // =====================================================================
@@ -9269,9 +9402,13 @@ async function revealDashboard(){
   loginLoading.textContent = 'Loading dashboard data…';
   try{
     DATA = await loadDashboardData();
+    await loadMyPermissions();
+    logMyLogin();
     loginScreen.style.display = 'none';
     appShell.style.display = '';
     startDashboard();
+    applyTabPermissions();
+    applyWidgetPermissions();
   }catch(err){
     loginLoading.style.display = 'none';
     showLoginError('Signed in, but could not load dashboard data: ' + (err && err.message ? err.message : err));
