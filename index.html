@@ -1244,6 +1244,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
   #nmMap{height:62vh; min-height:460px; width:100%; background:#E2E8F0;}
   .nm-mapfloat{position:absolute; z-index:410; background:rgba(255,255,255,.97); border:1px solid var(--border);
     border-radius:10px; box-shadow:var(--shadow-md); padding:10px 12px; font-size:11.5px; color:#0F172A;}
+
+  /* Infrastructure Planning map (added 26-Nov-2026) -- same visual language as
+     the Overview tab's Network Map (#nmMapwrap/#nmMap) above, kept as its own
+     rule block since it's a separate Leaflet instance on a separate tab. */
+  .infra-map-frame{position:relative; isolation:isolate; border-radius:14px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow-md);}
+  #infraMap{height:56vh; min-height:420px; width:100%; background:#E2E8F0;}
+  .infra-map-legend{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px;}
+  .infra-map-legend span{display:flex; align-items:center; gap:6px; font-size:11.5px; color:#0F172A;}
   #nmLegendBox{bottom:14px; left:14px; max-width:230px;}
   #nmLegendBox h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#94A3B8; margin:0 0 7px;}
   .nm-leg-row{display:flex; align-items:center; gap:7px; margin:4px 0;}
@@ -2092,67 +2100,43 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div class="cap">Division-wise, Sr.DEN-wise and CN-unit-wise status of track-machine sidings and rest houses across SWR &bull; factual snapshot from the SWR Sidings and Rest House workbook</div>
     </div>
     <div class="kpirow" id="infraKpiRow"></div>
+
+    <!-- Sidings, Rest Houses & Satellite Depots map (added 26-Nov-2026).
+         Source: DATA.infraMap (pipeline/sources/infra_map.py) -- live
+         station-level TM/RGM/Rest-House flags + remarks (SrDEN Detailed
+         sheet) and RDPS geo-position, plus the static supplement for the
+         3 sanctioned satellite-depot proposals. Per Shruti's own request,
+         this replaces the standalone "Sanctioned TM Sidings" execution
+         card, the "Pending in Construction" table, and the "All Stations"
+         table that used to follow here -- that detail now lives either on
+         this map or inside each division's drawer below. -->
     <div class="card">
       <div class="cardhead">
-        <div><h3>By Division</h3><div class="cap">Click a division for its full station-level breakdown</div></div>
+        <div><h3>Sidings, Rest Houses &amp; Satellite Depots &mdash; Map</h3><div class="cap" id="infraMapCap">Every surveyed station with a TM siding / rest-house / satellite-depot entry &bull; click a marker for full detail</div></div>
+      </div>
+      <div id="infraMapWrap" style="display:none;">
+        <div class="infra-map-legend">
+          <span><span class="nm-leg-div-dot" style="background:var(--good);"></span>Available</span>
+          <span><span class="nm-leg-div-dot" style="background:var(--warn);"></span>Sanctioned</span>
+          <span><span class="nm-leg-div-dot" style="background:var(--steel-2);"></span>Proposed</span>
+          <span><span class="nm-leg-div-dot" style="background:#94A3B8;"></span>Struck Out / Withdrawn</span>
+          <span><span class="stn-badge depot" style="width:16px; height:16px; border-width:1.5px;"></span>Satellite Depot (sanctioned)</span>
+        </div>
+        <div class="infra-map-frame"><div id="infraMap"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cardhead">
+        <div><h3>By Division</h3><div class="cap">Click a division for its full station-level breakdown, including sanctioned-siding/rest-house execution position</div></div>
       </div>
       <div class="grid3" id="infraDivGrid"></div>
     </div>
 
-    <!-- Sanctioned TM Sidings — current execution position (added 15-Oct-2026).
-         Source: the new "TM Sanctioned Siding Status" sheet in the same Sidings
-         and Rest House workbook — the user-supplied position of works that have
-         already been administratively sanctioned: 3 approval checkpoints
-         (ESP/SIP/CRS), agency availability, and whether track/S&T work is
-         actually complete on the ground. Kept as its own clearly-labelled block
-         since it's a different source/question ("what's sanctioned, how far has
-         it actually progressed") than the Available/Sanctioned/Proposed siding
-         counts above. -->
-    <div class="card" id="infraSancWrap" style="display:none;">
-      <div class="cardhead">
-        <div><h3>Sanctioned TM Sidings &mdash; Current Execution Position</h3><div class="cap" id="infraSancCap">Every TM siding already administratively sanctioned &mdash; where it stands on technical clearance (ESP/SIP/CRS), agency availability, and track/S&amp;T work completion</div></div>
-      </div>
-      <div class="kpirow" id="infraSancKpiRow"></div>
-      <div class="grid2">
-        <div>
-          <div class="cap" style="margin-bottom:6px;">By stage &bull; click a slice to filter the list below</div>
-          <div class="chartwrap" style="height:230px"><div id="infraSancStageChart" class="svgchart"></div></div>
-        </div>
-        <div>
-          <div class="cap" style="margin-bottom:6px;">By division &bull; click a card to filter the list below</div>
-          <div class="grid3" id="infraSancDivGrid" style="gap:10px;"></div>
-        </div>
-      </div>
-      <div class="searchbar" style="margin-top:14px;">
-        <input type="text" id="infraSancSearch" placeholder="Search station, Sr.DEN...">
-        <select id="infraSancDivFilter"><option value="">All divisions</option><option>UBL</option><option>SBC</option><option>MYS</option></select>
-        <select id="infraSancStageFilter"><option value="">Any stage</option></select>
-      </div>
-      <div class="cap" id="infraSancTableCap"></div>
-      <div class="tblwrap" style="max-height:480px; overflow-y:auto;">
-        <table id="infraSancTable">
-          <thead><tr>
-            <th data-sort="division">Div</th><th data-sort="srden">Sr.DEN</th><th data-sort="station">Station</th>
-            <th class="num">ESP</th><th class="num">SIP</th><th class="num">CRS</th>
-            <th class="num">Agency</th><th class="num">Track</th><th class="num">S&amp;T</th>
-            <th data-sort="stage">Stage</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <div class="card">
-        <h3>FY Siding Target &mdash; by Division</h3>
-        <div class="cap" id="infraSidingTargetCap">Click a bar for the division's target detail</div>
-        <div class="chartwrap" style="height:220px"><div id="infraSidingTargetChart" class="svgchart"></div></div>
-      </div>
-      <div class="card">
-        <h3>FY Rest House Target &mdash; by Division</h3>
-        <div class="cap" id="infraRhTargetCap">Click a bar for the division's target detail</div>
-        <div class="chartwrap" style="height:220px"><div id="infraRhTargetChart" class="svgchart"></div></div>
-      </div>
+    <div class="card">
+      <h3>FY Siding Target &mdash; by Division</h3>
+      <div class="cap" id="infraSidingTargetCap">Click a bar for the division's target detail</div>
+      <div class="chartwrap" style="height:220px"><div id="infraSidingTargetChart" class="svgchart"></div></div>
     </div>
     <div class="card">
       <div class="cardhead">
@@ -2166,35 +2150,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <div><h3>Sr.DEN &mdash; wise Breakdown</h3><div class="cap">Every Sr.DEN jurisdiction across all three divisions &bull; click a row for its stations</div></div>
       </div>
       <div class="tblwrap"><table id="infraSrdenTable"><thead><tr><th>Sr.DEN</th><th>Division</th><th class="num">Stations</th><th class="num">Siding Avail.</th><th class="num">Siding Sanc.</th><th class="num">Siding Prop.</th><th class="num">RH Avail.</th><th class="num">RH Pending</th></tr></thead><tbody></tbody></table></div>
-    </div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Pending in Construction</h3><div class="cap">Sidings/rest houses currently with the Construction Organisation &bull; click a row for detail</div></div>
-      </div>
-      <div class="tblwrap"><table id="infraConstructionTable"><thead><tr><th>Division</th><th>Section</th><th>Station Required</th><th>Siding</th><th>Rest House</th></tr></thead><tbody></tbody></table></div>
-    </div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>All Stations &mdash; Siding &amp; Rest House Status</h3><div class="cap" id="infraStationCap">Full station-level list, all divisions &bull; click a row for detail</div></div>
-        <button class="btn" id="infraSourceBtn">View source sheet</button>
-      </div>
-      <div class="searchbar">
-        <input type="text" id="infraSearch" placeholder="Search station, section, Sr.DEN...">
-        <select id="infraDivFilter"><option value="">All divisions</option><option>MYS</option><option>SBC</option><option>UBL</option></select>
-        <select id="infraSrdenFilter"><option value="">All Sr.DEN</option></select>
-        <select id="infraSidingFilter"><option value="">Any siding status</option></select>
-        <select id="infraRhFilter"><option value="">Any rest house status</option></select>
-        <select id="infraRespFilter"><option value="">Any responsibility</option></select>
-      </div>
-      <div class="tblwrap" style="max-height:560px; overflow-y:auto;">
-        <table id="infraStationTable">
-          <thead><tr>
-            <th data-sort="division">Div</th><th data-sort="srden">Sr.DEN</th><th data-sort="section">Section</th><th data-sort="station">Station</th>
-            <th data-sort="sidingStatus">Siding Status</th><th data-sort="rhStatus">Rest House Status</th><th data-sort="responsibility">Responsibility</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
     </div>
 
   </section>
@@ -5938,13 +5893,37 @@ function renderInfraKpis(){
     return;
   }
   const sd = infra.summary.sidings, rh = infra.summary.restHouses;
-  const st = sd.target, rt = rh.target;
+  const st = sd.target;
+  // Satellite Depot tile (added 26-Nov-2026, per Shruti's RB-circular + new
+  // "Status of Sanctioned Depot" sheet instruction) -- sourced from the newer
+  // DATA.infraMap payload, not DATA.infra; degrades to a plain count if that
+  // payload isn't present in a given run. No RH target tile any more: the RB
+  // circular gives no Rest House target at all (SWR's "Target" column for
+  // Rest House is blank), only a Siding target and this Satellite Depot one.
+  const im = DATA.infraMap;
+  const rb = im && im.kpi && im.kpi.satDepotRB;
+  const depotCount = (im && im.depots && im.depots.length) || 0;
+  const satDepotVal = rb ? `${fmtReq(rb.available)} of ${fmtReq(rb.required)}` : (depotCount || '—');
+  const satDepotHint = rb
+    ? `required ${fmtReq(rb.required)}, RB target ${fmtReq(rb.target)} &bull; ${depotCount} sanctioned proposal(s) on record`
+    : `${depotCount} sanctioned proposal(s) on record`;
+  // Fixed 26-Nov-2026: the Master Summary sheet's live Google Apps Script sync
+  // is row-shifted for the whole restHouse block (every division's row reads
+  // the PREVIOUS division's data, and the real SWR total was never read at
+  // all -- see pipeline/sources/infra_map.py's module docstring and
+  // pipeline/data/infra_supplement.json's masterSummaryCorrected, hand-read
+  // straight from the source workbook). These two tiles now prefer that
+  // corrected figure (DATA.infraMap.kpi) over the old, still-buggy
+  // DATA.infra.summary.*.swr, falling back to the old figure only if the new
+  // DATA.infraMap payload is absent from a run (honest degradation).
+  const sdSwr = (im && im.kpi && im.kpi.siding) || sd.swr;
+  const rhSwr = (im && im.kpi && im.kpi.restHouse) || rh.swr;
   const kpis = [
     {l:'Stations Covered', v: infra.stationRows.length, hint:'with a TM siding / rest-house entry, SWR-wide', fn:()=>openInfraSourceDrawer()},
-    {l:'TM Sidings Available', v: fmtReq(sd.swr.available), hint:`of ${fmtReq(sd.swr.required)} required &bull; ${fmtReq(sd.swr.sanctioned)} sanctioned, ${fmtReq(sd.swr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
-    {l:'Rest Houses Available', v: fmtReq(rh.swr.available), hint:`of ${fmtReq(rh.swr.required)} required &bull; ${fmtReq(rh.swr.sanctioned)} sanctioned, ${fmtReq(rh.swr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
+    {l:'TM Sidings Available', v: fmtReq(sdSwr.available), hint:`of ${fmtReq(sdSwr.required)} required &bull; ${fmtReq(sdSwr.sanctioned)} sanctioned, ${fmtReq(sdSwr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
+    {l:'Rest Houses Available', v: fmtReq(rhSwr.available), hint:`of ${fmtReq(rhSwr.required)} required &bull; ${fmtReq(rhSwr.sanctioned)} sanctioned, ${fmtReq(rhSwr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
     {l:'FY 26-27 Siding Target', v: `${st.completedCount}/${st.total}`, hint:`completed SWR-wide as of ${esc(st.completedAsOf||'—')}`, fn:()=>openInfraTargetDrawer('sidings')},
-    {l:'FY 26-27 RH Target', v: `${rt.completedCount}/${rt.total}`, hint:`completed SWR-wide as of ${esc(rt.completedAsOf||'—')}`, fn:()=>openInfraTargetDrawer('restHouses')},
+    {l:'Satellite Depots', v: satDepotVal, hint: satDepotHint, fn:()=>openInfraSatDepotKpiDrawer()},
     {l:'Pending — CN Units', v: (infra.responsibility.overall['CN (Construction Org)']||0), hint:'stations awaiting the Construction Organisation', fn:()=>openInfraRespDrawer('CN (Construction Org)', null)},
   ];
   row.innerHTML = kpis.map(k=>`<div class="kpi"><div class="lbl">${k.l}</div><div class="val">${k.v}</div><div class="hint">${k.hint||''}</div></div>`).join('');
@@ -5996,10 +5975,13 @@ function openInfraDivisionDrawer(div){
   ]);
   if (sd.remarks) html += dcard('Siding Remarks', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(sd.remarks)}</div>`);
   if (rh.remarks) html += dcard('Rest House Remarks', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(rh.remarks)}</div>`);
+  html += infraMapSrdenCardHtml(div);
   html += dcard('Sr.DEN jurisdictions in this division', 'click one for its full station list', srdenRows.map(s=>{
     const avail = s.sidingStatus.Available||0;
     return breakRow(s.key, `${s.stations} stations &bull; ${avail} siding-available`, s.stations, s.stations? avail/s.stations: null, ()=>openInfraSrdenDrawer(s.key));
   }).join('') || '<div class="dcap">No Sr.DEN breakdown available.</div>');
+  html += infraMapExecutionCardHtml(div);
+  html += infraMapRhExecutionCardHtml(div);
   openDrawer(`${DIV_LABEL[div]||div} — Infrastructure Planning`, `${div} division &bull; TM sidings &amp; rest houses`, html);
 }
 
@@ -6351,24 +6333,18 @@ function renderInfraTargetCharts(){
   const infra = DATA.infra;
   if (!infra) return;
   const divs = ['UBL','SBC','MYS'];
-  const st = infra.summary.sidings.target, rt = infra.summary.restHouses.target;
+  const st = infra.summary.sidings.target;
   const capEl1 = document.getElementById('infraSidingTargetCap');
-  const capEl2 = document.getElementById('infraRhTargetCap');
   if (capEl1){
     capEl1.innerHTML = `FY ${esc(st.fy||'—')} &bull; ${st.completedCount} of ${st.total} completed SWR-wide as of ${esc(st.completedAsOf||'—')} &bull; click for the completed list`;
     if (!capEl1._wired){ capEl1._wired=true; capEl1.style.cursor='pointer'; capEl1.addEventListener('click', ()=>openInfraTargetDrawer('sidings')); }
   }
-  if (capEl2){
-    capEl2.innerHTML = `FY ${esc(rt.fy||'—')} &bull; ${rt.completedCount} of ${rt.total} completed SWR-wide as of ${esc(rt.completedAsOf||'—')} &bull; click for the completed list`;
-    if (!capEl2._wired){ capEl2._wired=true; capEl2.style.cursor='pointer'; capEl2.addEventListener('click', ()=>openInfraTargetDrawer('restHouses')); }
-  }
+  // No more "FY Rest House Target" chart (removed 26-Nov-2026, per Shruti:
+  // the RB circular gives no Rest House target at all for SWR, only a
+  // Siding target and the Satellite Depot target now on the KPI row).
   safe('infraSidingTargetChart', ()=> svgBar(document.getElementById('infraSidingTargetChart'), {
     labels: divs, series:[{label:'FY 2026-27 Target (new sidings)', data: divs.map(d=>(st.byDivision||{})[d]||0), color: cssVar('--target')}],
     onBarClick:()=>openInfraTargetDrawer('sidings')
-  }));
-  safe('infraRhTargetChart', ()=> svgBar(document.getElementById('infraRhTargetChart'), {
-    labels: divs, series:[{label:'FY 2026-27 Target (new rest houses)', data: divs.map(d=>(rt.byDivision||{})[d]||0), color: cssVar('--target')}],
-    onBarClick:()=>openInfraTargetDrawer('restHouses')
   }));
 }
 
@@ -6462,6 +6438,203 @@ function openInfraSourceDrawer(){
     const csv = tableToCsv(headers, rows);
     saveBlob('swr-sidings-rest-house.csv', new Blob([csv],{type:'text/csv'})).then(r=>{ if(!r.ok) flashNear(e.currentTarget, 'download unavailable here'); });
   });
+}
+
+// =====================================================================
+// Sidings, Rest Houses & Satellite Depots — Map (added 26-Nov-2026), per
+// Shruti: she manually corrected the RDPS station codes in Supabase, shared
+// the new "Status of Sanctioned Depot" sheet, pointed to the RB circular's
+// Satellite Depot target, and asked for "the further code for the website".
+// Sourced entirely from the NEW DATA.infraMap payload key (built by
+// pipeline/sources/infra_map.py) -- separate from the older DATA.infra
+// object the KPI row / division cards / Sr.DEN table above still use, and
+// deliberately left alongside it rather than replacing it (see this
+// project's project-status.md for the full list of what's genuinely live
+// vs. still a static supplement). Markers reuse the exact same .stn-badge
+// visual language as the Overview tab's Network Map, including its
+// Esri World Street Map tile layer, for a consistent look across both maps
+// -- but this is its own, independent Leaflet instance (#infraMap), not a
+// second view onto the Network Map's own #nmMap.
+//
+// Per Shruti's explicit "whatever tables you have added now, all those can
+// be removed, as we are adding a map which will be inclusive of all these
+// details": the standalone "Sanctioned TM Sidings — Current Execution
+// Position" card, "Pending in Construction" table, and "All Stations" table
+// that used to follow the division grid have all been removed. The
+// sanctioned-siding execution detail they held (DATA.infra.sanctionedSidingStatus,
+// ESP/SIP/CRS/agency/track/S&T — a different, already-live source from the
+// new map data) now lives inside each division's own drawer instead (see
+// infraMapExecutionCardHtml() below, folded into openInfraDivisionDrawer()).
+// =====================================================================
+function infraMapAvailable(){ return !!(DATA.infraMap && (DATA.infraMap.mapStations||[]).length); }
+
+function infraMapStationStatus(r){
+  if (r.struck) return {label:'Struck Out / Withdrawn', color:'#94A3B8'};
+  if (r.sidingAvailTM || r.sidingAvailRGM || r.rhAvail) return {label:'Available', color: cssVar('--good')};
+  if (r.sidingSancTM || r.sidingSancRGM || r.rhSanc) return {label:'Sanctioned', color: cssVar('--warn')};
+  if (r.sidingPropTM || r.sidingPropRGM || r.rhProp) return {label:'Proposed', color: cssVar('--steel-2')};
+  return {label:'Status unclear', color:'#94A3B8'};
+}
+
+let infraMapInited = false, infraMapInstance = null;
+function renderInfraMap(){
+  const wrap = document.getElementById('infraMapWrap');
+  if (!wrap) return;
+  if (!infraMapAvailable()){ wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const im = DATA.infraMap;
+  const capEl = document.getElementById('infraMapCap');
+  if (capEl) capEl.textContent = `${im.mapStations.length} station(s) placed on the map`
+    + (im.unmappedStations.length? ` &bull; ${im.unmappedStations.length} station(s) with a siding/rest-house entry could not be placed yet (no surveyed or approximate position on record)`:'')
+    + ` &bull; ${im.depots.length} satellite depot proposal(s) &bull; as of ${esc(im.asOf||'—')}`;
+  if (infraMapInited){ if (infraMapInstance) setTimeout(()=>infraMapInstance.invalidateSize(), 50); return; }
+  const el = document.getElementById('infraMap');
+  if (!el || typeof L === 'undefined') return;
+  infraMapInited = true;
+  infraMapInstance = L.map('infraMap', {scrollWheelZoom:true}).setView([14.6, 76.0], 7);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 17, attribution: 'Esri, HERE, Garmin &copy; OpenStreetMap contributors'
+  }).addTo(infraMapInstance);
+  const bounds = [];
+  im.mapStations.forEach(r=>{
+    if (r.lat==null || r.lon==null) return;
+    const st = infraMapStationStatus(r);
+    const icon = L.divIcon({html:`<div class="stn-badge" style="background:${st.color};"></div>`, className:'', iconSize:[22,22], iconAnchor:[11,11]});
+    const marker = L.marker([r.lat, r.lon], {icon}).addTo(infraMapInstance);
+    marker.bindTooltip(`${esc(r.station)} — ${esc(st.label)}`);
+    marker.on('click', ()=> openInfraMapStationDrawer(r));
+    bounds.push([r.lat, r.lon]);
+  });
+  (im.depots||[]).forEach(d=>{
+    if (d.lat==null || d.lon==null) return;
+    const icon = L.divIcon({html:`<div class="stn-badge depot"></div>`, className:'', iconSize:[22,22], iconAnchor:[11,11]});
+    // High zIndexOffset: Leaflet otherwise stacks markers purely by latitude,
+    // so a depot marker can end up buried under overlapping station markers
+    // and become unclickable -- these 3 are high-value and should always be
+    // reachable on top.
+    const marker = L.marker([d.lat, d.lon], {icon, zIndexOffset: 1000}).addTo(infraMapInstance);
+    marker.bindTooltip(`${esc(d.station)} — Satellite Depot (sanctioned)`);
+    marker.on('click', ()=> openInfraDepotDrawer(d));
+    bounds.push([d.lat, d.lon]);
+  });
+  if (bounds.length) infraMapInstance.fitBounds(bounds, {padding:[28,28]});
+  setTimeout(()=>{ if (infraMapInstance) infraMapInstance.invalidateSize(); }, 80);
+}
+
+function infraMapYn(v){ return v? '✓' : '—'; }
+function openInfraMapStationDrawer(r){
+  const st = infraMapStationStatus(r);
+  let html = statRow([
+    {l:'Division', v: esc(DIV_LABEL[r.division]||r.division||'—')}, {l:'Sr.DEN', v: esc(r.srdenRaw||'—')},
+    {l:'Section', v: esc(r.section||'—')}, {l:'Km', v: r.km??'—'},
+  ]);
+  html += dcard('TM Siding', null, statRow([
+    {l:'Available', v: infraMapYn(r.sidingAvailTM), cls: r.sidingAvailTM?'good':''},
+    {l:'Sanctioned', v: infraMapYn(r.sidingSancTM), cls: r.sidingSancTM?'warn':''},
+    {l:'Proposed', v: infraMapYn(r.sidingPropTM)},
+  ]));
+  html += dcard('RGM Siding', null, statRow([
+    {l:'Available', v: infraMapYn(r.sidingAvailRGM), cls: r.sidingAvailRGM?'good':''},
+    {l:'Sanctioned', v: infraMapYn(r.sidingSancRGM), cls: r.sidingSancRGM?'warn':''},
+    {l:'Proposed', v: infraMapYn(r.sidingPropRGM)},
+  ]));
+  html += dcard('Rest House', null, statRow([
+    {l:'Available', v: infraMapYn(r.rhAvail), cls: r.rhAvail?'good':''},
+    {l:'Sanctioned', v: infraMapYn(r.rhSanc), cls: r.rhSanc?'warn':''},
+    {l:'Proposed', v: infraMapYn(r.rhProp)},
+  ]));
+  if (r.remark) html += dcard('Remark', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(r.remark)}</div>`);
+  if (r.struck) html += `<div class="dcap" style="color:var(--warn);">Shown struck through in the source workbook — treat as withdrawn/superseded, not an active entry.</div>`;
+  html += `<div class="dcap">As of ${esc((DATA.infraMap&&DATA.infraMap.asOf)||'—')}${r.interSidingDistance!=null?(' &bull; Inter-siding distance: '+esc(r.interSidingDistance)):''}</div>`;
+  openDrawer(r.station, `${esc(DIV_LABEL[r.division]||r.division||'')} &bull; ${esc(r.srdenRaw||'')} &bull; ${esc(st.label)}`, html);
+}
+
+function openInfraDepotDrawer(d){
+  const html = statRow([
+    {l:'Division', v: esc(DIV_LABEL[d.division]||d.division||'—')}, {l:'Sr.DEN', v: esc(d.jurisdictionRaw||'—')},
+  ]) + dcard(d.description||'Satellite Depot', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(d.status||'—')}</div>`);
+  openDrawer(d.station, 'Satellite Track Machine Depot — sanctioned, under execution', html);
+}
+
+function openInfraSatDepotKpiDrawer(){
+  const im = DATA.infraMap || {};
+  const rb = im.kpi && im.kpi.satDepotRB;
+  let html = rb ? statRow([
+    {l:'Required (RB)', v: rb.required??'—'}, {l:'Available (RB)', v: rb.available??'—'}, {l:'Target (RB)', v: rb.target??'—'},
+  ]) : '<div class="dcap">No RB circular target found in the latest sync.</div>';
+  html += dcard('Sanctioned depot proposals', 'click one for its full status note', (im.depots||[]).map(d=>
+    breakRow(`${d.station} — ${d.description||''}`, (d.status||'').slice(0,90)+((d.status||'').length>90?'…':''), esc(DIV_LABEL[d.division]||d.division||''), null, ()=>openInfraDepotDrawer(d))
+  ).join('') || '<div class="dcap">No sanctioned depot proposals on record.</div>');
+  openDrawer('Satellite Track Machine Depots', 'Railway Board circular target vs. sanctioned proposals on record &bull; SWR-wide', html);
+}
+
+// ---- New, per-section (not just per-Sr.DEN) breakdown, folded into each
+// division's own drawer (openInfraDivisionDrawer() above) alongside the
+// existing coarser Sr.DEN-jurisdiction list: this one carries live remarks
+// and strikeout flags the older DATA.infra.srdenTable doesn't.
+function infraMapSectionBlockHtml(blk, label){
+  if (!blk) return '';
+  const struck = new Set(blk.struckStations||[]);
+  const listLine = (lbl, codes)=> codes.length? `<div class="dcap" style="margin-top:4px;">${lbl}: ${codes.map(c=>esc(c)+(struck.has(c)?' <span class="pill neutral">struck</span>':'')).join(', ')}</div>` : '';
+  return dcard(label, null, statRow([
+    {l:'Required', v: fmtReq(blk.required)}, {l:'Available', v: fmtReq(blk.available)},
+    {l:'Sanctioned', v: fmtReq(blk.sanctioned)}, {l:'Proposed', v: fmtReq(blk.proposed)},
+  ]) + listLine('Available', blk.availableStations||[]) + listLine('Sanctioned', blk.sanctionedStations||[]) + listLine('Proposed', blk.proposedStations||[])
+    + (blk.remark? `<div class="dcap" style="margin-top:6px; white-space:pre-wrap;">${esc(blk.remark)}</div>`:''));
+}
+function openInfraMapSectionDrawer(div, slNo){
+  const rows = (DATA.infraMap && DATA.infraMap.srdenBreakdown && DATA.infraMap.srdenBreakdown[div]) || [];
+  const s = rows.find(r=>r.slNo===slNo);
+  if (!s) return;
+  let html = statRow([
+    {l:'Sr.DEN', v: esc(s.srden||'—')}, {l:'Section length', v: s.sectionLength??'—'}, {l:'Stations', v: s.stations??'—'},
+  ]);
+  html += infraMapSectionBlockHtml(s.tm, 'TM Siding') + infraMapSectionBlockHtml(s.rgm, 'RGM Siding') + infraMapSectionBlockHtml(s.rh, 'Rest House');
+  openDrawer(s.majorSection || ('Section '+s.slNo), `${esc(DIV_LABEL[div]||div)} &bull; ${esc(s.srden||'')}`, html);
+}
+function infraMapSrdenCardHtml(div){
+  const rows = (DATA.infraMap && DATA.infraMap.srdenBreakdown && DATA.infraMap.srdenBreakdown[div]) || [];
+  if (!rows.length) return '';
+  return dcard('Section-wise Siding &amp; Rest House status (live, with remarks)', 'click a section for the full TM/RGM/Rest-House breakdown', rows.map(s=>{
+    const availCount = ((s.tm&&s.tm.availableStations.length)||0) + ((s.rgm&&s.rgm.availableStations.length)||0) + ((s.rh&&s.rh.availableStations.length)||0);
+    return breakRow(s.majorSection || ('Section '+s.slNo), `${s.stations||0} stations &bull; ${esc(s.srden||'')}`, availCount, s.stations? availCount/(s.stations*3): null, ()=>openInfraMapSectionDrawer(div, s.slNo));
+  }).join(''));
+}
+
+// ---- Sanctioned-execution detail, folded into each division's drawer in
+// place of the removed standalone "Sanctioned TM Sidings" card. TM-siding
+// execution (ESP/SIP/CRS/agency/track/S&T) is already-live, per-station
+// detail (DATA.infra.sanctionedSidingStatus); Rest House execution is the
+// NEW "TM Sanctioned RH Status" sheet, only available so far as division-
+// level stage counts (DATA.infraMap.divisionRollup) -- it isn't live-synced
+// station-by-station yet, so it's shown as counts only, not a station list
+// (honest degradation, not a table that looks complete but isn't).
+function sancStationRowHtml(r){
+  const id = 'ssr'+Math.random().toString(36).slice(2,9);
+  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openSancDrawer(r)); }, 0);
+  return `<div class="dmachine-card" id="${id}">
+    <div class="dmtop"><span class="dmname">${esc(r.station)}</span><span class="pill ${sancPillClass(r.stage)}">${esc(r.stage)}</span></div>
+    <div class="dmmeta">${esc(r.srden||'—')}</div>
+  </div>`;
+}
+function infraMapExecutionCardHtml(div){
+  if (!sancAvailable()) return '';
+  const sss = DATA.infra.sanctionedSidingStatus;
+  const dc = sss.byDivision[div];
+  if (!dc) return '';
+  const dstations = sss.stations.filter(r=>r.division===div);
+  return dcard('Sanctioned TM Sidings — Execution Position', 'click a station for ESP/SIP/CRS, agency and track/S&amp;T detail', statRow([
+    {l:'Tracked', v: dc.total}, {l:'Completed', v: dc.completed}, {l:'Agency Avail.', v: dc.agencyAvailable},
+    {l:'Track Done', v: dc.trackWorksCompleted}, {l:'S&amp;T Done', v: dc.sntWorksCompleted},
+  ]) + dstations.map(sancStationRowHtml).join(''));
+}
+function infraMapRhExecutionCardHtml(div){
+  const im = DATA.infraMap;
+  const roll = im && im.divisionRollup && im.divisionRollup[div];
+  if (!roll || !roll.rhExecution || !roll.rhExecution.total) return '';
+  const stages = roll.rhExecution.byStage || {};
+  return dcard('Sanctioned Rest Houses — Execution Position', `${roll.rhExecution.total} sanctioned rest house(s) tracked &bull; station-level detail not yet live-synced`,
+    Object.entries(stages).map(([k,v])=>breakRow(k, '', v, null)).join(''));
 }
 
 // ---------------------------------------------------------------------
@@ -6602,20 +6775,17 @@ function drawInfraCharts(){
   });
   renderInfraNote();
   renderInfraKpis();
+  renderInfraMap();
   if (!infraAvailable()){
     const grid = document.getElementById('infraDivGrid');
     if (grid) grid.innerHTML = '<div class="emptynote">The "SWR Sidings and Rest House" workbook was not found in the latest sync — this tab will populate automatically once it is added back to the Machine Monitoring folder.</div>';
     return;
   }
   renderInfraDivGrid();
-  renderSancSection();
   renderInfraTargetCharts();
   setupInfraRespToggle();
   renderInfraRespChart('overall');
   renderInfraSrdenTable();
-  renderInfraConstructionTable();
-  const infraSrcBtn = document.getElementById('infraSourceBtn');
-  if (infraSrcBtn && !infraSrcBtn._wired){ infraSrcBtn._wired = true; infraSrcBtn.addEventListener('click', openInfraSourceDrawer); }
 }
 
 // =====================================================================
