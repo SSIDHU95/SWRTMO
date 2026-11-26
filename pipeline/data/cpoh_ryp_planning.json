@@ -1,0 +1,112 @@
+{
+  "_comment": "Hand-transcribed from the signed CPOH/RYP forward POH-planning letter Shruti shared on 26-Nov-2026 (SOUTH WESTERN RAILWAY, No.SWR/TM.506/CPOH, dated 07.10.2026, 'POH Planning of track machines for the year 2027-28 and tentative planning for the year 2028-29 & 2029-30', signed Dy.CE/TM/YPR). There is no live Supabase table for this -- it is a signed PDF letter, issued roughly once a year, not a Google Sheet -- so this file is the data source extract_cpoh_ryp_planning() reads. WHEN SHRUTI SHARES A NEW SIGNED LETTER: replace this whole file with a new one transcribed the same way (same shape), update letterDate below, and no dashboard/pipeline code change is needed.",
+  "letterDate": "07.10.2026",
+  "proposed2728": [
+    {
+      "machine": "DTE-9006", "lastPohDate": "28.11.2023", "ehSinceLastPoh": 4529,
+      "cumProgress": "1541 KM", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Apr-27",
+      "engines": [
+        {"makeModel": "CAT, C-18", "ehSinceLastPoh": 4529},
+        {"makeModel": "CAT, C-9", "ehSinceLastPoh": 3590}
+      ]
+    },
+    {
+      "machine": "DTE-57083", "lastPohDate": "1st POH", "ehSinceLastPoh": "-",
+      "cumProgress": "-", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Jun-27",
+      "engines": [{"makeModel": "CAT, C-18", "ehSinceLastPoh": "1st POH"}]
+    },
+    {
+      "machine": "MPT-56943", "lastPohDate": "1st POH", "ehSinceLastPoh": "-",
+      "cumProgress": "-", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Jul-27",
+      "engines": [{"makeModel": "CUMMINS, QSN14L", "ehSinceLastPoh": "1st POH"}]
+    },
+    {
+      "machine": "UNI-8427", "lastPohDate": "16.09.2023", "ehSinceLastPoh": 3935,
+      "cumProgress": "1533 T/O", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Aug-27",
+      "engines": [{"makeModel": "CUMMINS, KTA 1150L", "ehSinceLastPoh": 3935}]
+    },
+    {
+      "machine": "DGS-447", "lastPohDate": "23.02.2023", "ehSinceLastPoh": 4123,
+      "cumProgress": "1018 KM", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Sep-27",
+      "engines": [{"makeModel": "CUMMINS, KTA-1150L", "ehSinceLastPoh": 4123}]
+    },
+    {
+      "machine": "PCTM-27", "lastPohDate": "1st POH", "ehSinceLastPoh": "-",
+      "cumProgress": "-", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Oct-27",
+      "engines": [{"makeModel": "DUETZ, TCD2015V08", "ehSinceLastPoh": "1st POH"}]
+    },
+    {
+      "machine": "DUO-3324", "lastPohDate": "29.03.2025", "ehSinceLastPoh": 2194,
+      "cumProgress": "1050 KM", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Nov-27",
+      "engines": [{"makeModel": "CUMMINS, NTA 855L", "ehSinceLastPoh": 2194}]
+    },
+    {
+      "machine": "UNI-8269", "lastPohDate": "04.02.2025", "ehSinceLastPoh": 2224.7,
+      "cumProgress": "940 T/O", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Dec-27",
+      "engines": [{"makeModel": "CUMMINS, KTA 1150L", "ehSinceLastPoh": 2224.7}]
+    },
+    {
+      "machine": "UNI-8409", "lastPohDate": "16.03.2025", "ehSinceLastPoh": 3028,
+      "cumProgress": "741 T/O", "governingReason": "Proposed POH based on Engine hours.",
+      "probableSparingMonth": "Feb-28",
+      "engines": [{"makeModel": "CUMMINS, KTA-1150L", "ehSinceLastPoh": 3028}]
+    },
+    {
+      "machine": "SRGM-20-04", "lastPohDate": "1st POH", "ehSinceLastPoh": "-",
+      "cumProgress": "-", "governingReason": "Mar'28, Machine completes 60 months from DOC.",
+      "probableSparingMonth": "Mar-28",
+      "engines": [{"makeModel": "CUMMINS, QST 30 - G5 NR2", "ehSinceLastPoh": "1st POH"}]
+    }
+  ],
+  "tentative2829": [
+    {"machine": "DUO-8079", "type": "DUO", "lastPohDate": "23.09.2024"},
+    {"machine": "MPT-56968", "type": "MPT", "lastPohDate": "1st POH"},
+    {"machine": "DUO-8112", "type": "DUO", "lastPohDate": "20.12.2024"},
+    {"machine": "SBCM-56404", "type": "SBCM", "lastPohDate": "1st POH"},
+    {"machine": "BCM-392", "type": "BCM", "lastPohDate": "16.11.2023"},
+    {"machine": "BCM-400", "type": "BCM", "lastPohDate": "03.03.2024"},
+    {"machine": "MPT-56967", "type": "MPT", "lastPohDate": "1st POH"},
+    {"machine": "BCM-56824", "type": "BCM", "lastPohDate": "1st POH"},
+    {"machine": "DGS-410", "type": "DGS", "lastPohDate": "13.09.2024"},
+    {"machine": "PCTM-26", "type": "PCTM", "lastPohDate": "1st POH"},
+    {"machine": "MPT-2014", "type": "MPT", "lastPohDate": "13.03.2026"},
+    {"machine": "DUO-8128", "type": "DUO", "lastPohDate": "24.07.2026"},
+    {"machine": "DGS-417", "type": "DGS", "lastPohDate": "25.08.2025"},
+    {"machine": "MPT-56577", "type": "MPT", "lastPohDate": "1st POH"}
+  ],
+  "tentative2930": [
+    {"machine": "RGM-IR96-07", "type": "RGM", "lastPohDetails": "1st POH"},
+    {"machine": "MPT-2016", "type": "MPT", "lastPohDetails": "Under POH"},
+    {"machine": "MPT-12007", "type": "MPT", "lastPohDetails": "1st POH"},
+    {"machine": "DTE-56749", "type": "DTE", "lastPohDetails": "07.04.2026"},
+    {"machine": "MPT-12008", "type": "MPT", "lastPohDetails": "1st POH"},
+    {"machine": "CSM-984", "type": "CSM", "lastPohDetails": "06.05.2023"},
+    {"machine": "DTE-56850", "type": "DTE", "lastPohDetails": "1st POH"},
+    {"machine": "BCM-384", "type": "BCM", "lastPohDetails": "04.10.2025"},
+    {"machine": "DUO-8106", "type": "DUO", "lastPohDetails": "24.04.2023"},
+    {"machine": "DUO-8090", "type": "DUO", "lastPohDetails": "11.09.2023"},
+    {"machine": "MPT-12015", "type": "MPT", "lastPohDetails": "1st POH"},
+    {"machine": "MPT-2011", "type": "MPT", "lastPohDetails": "04.09.2026"},
+    {"machine": "MPT-56591", "type": "MPT", "lastPohDetails": "18.05.2026"}
+  ],
+  "tampingDemand": [
+    {"forFy": "2027-28", "tampingType": "CSM/WST", "machine": "CSM-984", "month": "Apr-2027", "requiredMake": "Plasser make"},
+    {"forFy": "2027-28", "tampingType": "CSM/WST", "machine": "DUO-3324", "month": "Feb-2028", "requiredMake": "Plasser make"},
+    {"forFy": "2027-28", "tampingType": "DTE (HOT-3X)", "machine": "DTE-9006", "month": "Jun-2027", "requiredMake": "Plasser make"},
+    {"forFy": "2027-28", "tampingType": "DTE (HOT-3X)", "machine": "DTE-57083", "month": "Oct-2027", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "CSM/WST", "machine": "DUO-8079", "month": "Apr-2028", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "CSM/WST", "machine": "DUO-8112", "month": "Jun-2028", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "CSM/WST", "machine": "CSM-945", "month": "Jun-2028", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "CSM/WST", "machine": "DUO-8128", "month": "Mar-2029", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "UNI-4S", "machine": "PCTM-26", "month": "Nov-2028", "requiredMake": "Plasser make"},
+    {"forFy": "2028-29", "tampingType": "MPT", "machine": "MPT-56577", "month": "Mar-2029", "requiredMake": "Plasser make"}
+  ]
+}
