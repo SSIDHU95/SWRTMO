@@ -1956,23 +1956,34 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </section>
 
   <!-- ============ 53-POINT TM ACTION PLAN ============ -->
+  <!-- Restructured 26-Nov-2026 per Shruti's own marked-up PDF of this tab
+       (crossed out the KPI tiles row and the whole "Insights for Officers"
+       auto-analysis block -- This Cycle at a Glance / Needs Follow-Up /
+       Updated But Largely Unchanged / Machines Touching Multiple Action
+       Points / Upcoming Target Dates / Category Momentum -- and checkmarked,
+       in this order: the category chart, Supervisor Load, then the full
+       point list). This removes those sections from THIS display only --
+       DATA.actionPlan53.insights itself is untouched on the backend, since
+       the top-nav attention badge and the chat assistant still read
+       stalledPoints/flaggedNilPoints from it (see the apCount computation
+       near setNavCounts()). Only Supervisor Load survives from the old
+       Insights block, promoted to its own standalone card. -->
   <section class="module" id="mod-actionplan53">
     <div class="card">
       <h3>53-Point Track Machine Action Plan &mdash; 15-Day Review</h3>
       <div class="cap" id="apHeaderCap">A standing, board-level action plan across Safety, Reliability, Quality, Availability, Expenditure, Staff Welfare, Skill Development and Miscellaneous &bull; refreshed with a new review column roughly every 15 days</div>
-    </div>
-    <div class="kpirow" id="apKpiRow"></div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Insights for Officers</h3><div class="cap">Auto-generated from this cycle's actual entries &mdash; follow-ups, repeat write-ups, cross-referenced machines and upcoming dates, not just the raw narrative</div></div>
-      </div>
-      <div id="apInsightsBox"></div>
     </div>
     <div class="card">
       <div class="cardhead">
         <div><h3>Points by Category</h3><div class="cap">Click a bar to filter the list below to that category</div></div>
       </div>
       <div class="chartwrap" style="height:280px"><div id="apCatChart" class="svgchart"></div></div>
+    </div>
+    <div class="card">
+      <div class="cardhead">
+        <div><h3>Supervisor Load</h3><div class="cap">Action points per nominated supervisor this cycle</div></div>
+      </div>
+      <div id="apSupervisorLoadBox"></div>
     </div>
     <div class="card">
       <div class="cardhead">
@@ -5313,114 +5324,44 @@ function renderApList(){
   document.getElementById('apListCap').textContent = `${rows.length} of ${ap.totalPoints} action points &bull; latest review ${ap.latestReviewDate||''} &bull; click a card for the full history since April`.replace('&bull;','•');
 }
 // ---------------------------------------------------------------------
-// Insights for Officers — computed from the actual data (text-similarity,
-// presence patterns, regex-extracted machine IDs/dates, supervisor-assignment
+// Supervisor Load — computed from the actual data (supervisor-assignment
 // counts), never an invented status or quality judgement the source
 // narrative doesn't support. See _build_action_plan_insights() in
-// run_pipeline.py for how each signal is derived.
+// run_pipeline.py for how this signal is derived.
+//
+// This is the one surviving piece of what used to be a much larger
+// "Insights for Officers" block (This Cycle at a Glance / Needs Follow-Up /
+// Updated But Largely Unchanged / Machines Touching Multiple Action Points /
+// Upcoming Target Dates / Category Momentum) -- removed from this tab's
+// display 26-Nov-2026 per Shruti's own marked-up PDF, which crossed out
+// everything except the category chart, Supervisor Load and the full point
+// list, in that order. DATA.actionPlan53.insights still carries all of that
+// removed data (stalledPoints/flaggedNilPoints still drive the top-nav
+// attention badge and the chat assistant), this function just no longer
+// displays most of it on this tab.
 // ---------------------------------------------------------------------
-function apRefChip(sno, title){
-  const id = 'apref'+Math.random().toString(36).slice(2,9);
-  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openActionPlan53Drawer(sno)); }, 0);
-  return `<span id="${id}" style="cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px;">#${sno} ${esc(title)}</span>`;
-}
-function renderApInsights(){
+function renderApSupervisorLoad(){
   const ap = DATA.actionPlan53;
-  const box = document.getElementById('apInsightsBox');
+  const box = document.getElementById('apSupervisorLoadBox');
   if (!box) return;
-  if (!ap || !ap.insights){ box.innerHTML = '<div class="emptynote">No insights available for this run.</div>'; return; }
-  const ins = ap.insights;
-  const groups = [];
-
-  const mo = ins.momentum || {};
-  const updatedTotal = (mo.substantiveUpdates||0) + (mo.repeatUpdates||0);
-  groups.push({title:'This Cycle at a Glance', items: [
-    `Of the ${updatedTotal} points marked updated this cycle (${esc(ap.latestReviewDate||'')}), <b>${mo.substantiveUpdates||0}</b> carry genuinely new content and <b>${mo.repeatUpdates||0}</b> are largely a repeat of the previous cycle's write-up (&gt;80% text overlap) &mdash; worth a quick check on whether real progress happened or the entry was just carried forward. <b>${mo.notUpdated||0}</b> point(s) received no entry at all this cycle.`
-  ]});
-
-  const followSno = new Set();
-  const followItems = [];
-  (ins.stalledPoints||[]).forEach(p=>{
-    followSno.add(p.sno);
-    followItems.push(`${apRefChip(p.sno, p.actionPoint)} <span class="apcat" style="background:${apCategoryColor(p.category)}">${esc(apTitleCase(p.category))}</span> &mdash; no entry logged for the last two review cycles in a row${p.latestDate?` (last update ${esc(p.latestDate)})`:''}. Worth a direct follow-up with the nominated supervisor.`);
-  });
-  (ins.flaggedNilPoints||[]).forEach(p=>{
-    if (followSno.has(p.sno)) return;
-    followSno.add(p.sno);
-    followItems.push(`${apRefChip(p.sno, p.actionPoint)} <span class="apcat" style="background:${apCategoryColor(p.category)}">${esc(apTitleCase(p.category))}</span> &mdash; this cycle's own entry says: &ldquo;${esc(p.text)}&rdquo;`);
-  });
-  if (followItems.length) groups.push({title:'Needs Follow-Up', items: followItems});
-
-  if ((ins.repeatPoints||[]).length){
-    const prevLabel = ap.reviewDates.length>1 ? ap.reviewDates[ap.reviewDates.length-2] : 'the previous cycle';
-    const chips = ins.repeatPoints.map(p=>apRefChip(p.sno, p.actionPoint)).join(', ');
-    groups.push({title:'Updated, But Largely Unchanged From Last Cycle', items: [
-      `${ins.repeatPoints.length} point(s) were marked updated but their latest entry is over 80% identical to the ${esc(prevLabel)} entry: ${chips}. That may be genuinely accurate if the situation hasn't moved &mdash; but worth confirming rather than assuming at the review.`
-    ]});
-  }
-
-  if ((ins.crossCuttingMachines||[]).length){
-    const items = ins.crossCuttingMachines.slice(0,8).map(m=>{
-      const catList = m.categories.map(apTitleCase).join(', ');
-      const chips = m.points.map(p=>apRefChip(p.sno, p.category)).join(', ');
-      return `<b>${esc(m.machine)}</b> is named in ${m.points.length} action points spanning ${esc(catList)} this cycle (${chips}) &mdash; likely worth one consolidated look rather than tracking it separately per category.`;
-    });
-    groups.push({title:'Machines Touching Multiple Action Points', items});
-  }
-
-  if ((ins.upcomingDates||[]).length){
-    const items = ins.upcomingDates.slice(0,10).map(u=>
-      `<b>${esc(u.date)}</b> &mdash; ${apRefChip(u.sno, u.actionPoint)} <span class="apcat" style="background:${apCategoryColor(u.category)}">${esc(apTitleCase(u.category))}</span>: &ldquo;&hellip;${esc(u.snippet)}&rdquo;`
-    );
-    groups.push({title:'Upcoming Target Dates Mentioned This Cycle', items});
-  }
-
-  if ((ins.categoryMomentum||[]).length){
-    const cm = ins.categoryMomentum.filter(c=>c.prevCycleChars>0 || c.thisCycleChars>0);
-    const risers = cm.filter(c=>c.pctChange!=null && c.pctChange>=30).sort((a,b)=>b.pctChange-a.pctChange).slice(0,3);
-    const fallers = cm.filter(c=>c.pctChange!=null && c.pctChange<=-15).sort((a,b)=>a.pctChange-b.pctChange).slice(0,3);
-    const items = [];
-    risers.forEach(c=> items.push(`<b>${esc(apTitleCase(c.category))}</b> had a busy cycle &mdash; narrative volume up ${c.pctChange}% vs the previous review (${c.prevCycleChars.toLocaleString()} &rarr; ${c.thisCycleChars.toLocaleString()} characters).`));
-    fallers.forEach(c=> items.push(`<b>${esc(apTitleCase(c.category))}</b> narrative volume is down ${Math.abs(c.pctChange)}% vs the previous review (${c.prevCycleChars.toLocaleString()} &rarr; ${c.thisCycleChars.toLocaleString()} characters) &mdash; worth checking whether that's a genuinely quiet cycle or under-reporting.`));
-    if (items.length) groups.push({title:'Category Momentum vs Last Review', items});
-  }
-
-  if ((ins.supervisorLoad||[]).length){
-    const top = ins.supervisorLoad.filter(s=>s.name && s.name!=='-').slice(0,4);
-    if (top.length){
-      groups.push({title:'Supervisor Load', items: [
-        `Action points are spread unevenly across nominated supervisors &mdash; <b>${top.map(s=>`${esc(s.name)} (${s.pointCount})`).join(', ')}</b> currently carry the most. Useful context if any of their points also need escalation above.`
-      ]});
-    }
-  }
-
-  box.innerHTML = groups.filter(g=>g.items.length).map(g=>
-    `<div class="insight-group"><div class="insight-grouphead">${esc(g.title)}</div>${g.items.map(t=>`<div class="insight">${t}</div>`).join('')}</div>`
-  ).join('') || '<div class="emptynote">Nothing notable to flag this cycle.</div>';
+  const ins = (ap && ap.insights) || null;
+  const top = ins ? (ins.supervisorLoad||[]).filter(s=>s.name && s.name!=='-').slice(0,4) : [];
+  if (!top.length){ box.innerHTML = '<div class="emptynote">No supervisor-load data available for this run.</div>'; return; }
+  box.innerHTML = `<div class="insight">Action points are spread unevenly across nominated supervisors &mdash; <b>${top.map(s=>`${esc(s.name)} (${s.pointCount})`).join(', ')}</b> currently carry the most. Useful context if any of their points also need escalation above.</div>`;
 }
 function drawActionPlan53(){
   const ap = DATA.actionPlan53;
   const capEl = document.getElementById('apHeaderCap');
   if (!ap){
     if (capEl) capEl.textContent = 'No "53 Point TM Action Plan" workbook was found in the Machine Monitoring folder for this run.';
-    document.getElementById('apKpiRow').innerHTML = '';
-    document.getElementById('apInsightsBox').innerHTML = '';
+    document.getElementById('apSupervisorLoadBox').innerHTML = '';
     document.getElementById('apCatChart').innerHTML = '<div class="emptynote">No data</div>';
     renderApList();
     return;
   }
   if (capEl) capEl.innerHTML = `A standing, board-level action plan across Safety, Reliability, Quality, Availability, Expenditure, Staff Welfare, Skill Development and Miscellaneous &bull; ${ap.reviewDates.length} review checkpoints logged since ${esc(ap.reviewDates[0]||'')} &bull; latest review <b>${esc(ap.latestReviewDate||'')}</b>`;
 
-  const updated = ap.points.filter(p=>p.updatedThisCycle).length;
-  const kpis = [
-    {l:'Total Action Points', v: ap.totalPoints, hint:'across 8 categories'},
-    {l:'Review Checkpoints', v: ap.reviewDates.length, hint: `since ${ap.reviewDates[0]||''}`},
-    {l:'Updated This Cycle', v: `${updated}/${ap.totalPoints}`, hint: `as of ${ap.latestReviewDate||''}`},
-    {l:'No Update This Cycle', v: ap.totalPoints-updated, hint:'worth a follow-up', cls: (ap.totalPoints-updated)>0?'warn':''},
-  ];
-  document.getElementById('apKpiRow').innerHTML = kpis.map(k=>`<div class="kpi" style="cursor:default"><div class="lbl">${k.l}</div><div class="val" ${k.cls?`style="color:var(--${k.cls})"`:''}>${k.v}</div><div class="hint">${k.hint||''}</div></div>`).join('');
-
-  renderApInsights();
+  renderApSupervisorLoad();
 
   const cats = [...ap.categories].sort((a,b)=>b.count-a.count);
   const el = document.getElementById('apCatChart');
