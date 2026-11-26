@@ -117,7 +117,7 @@ def fetch_all_payloads(table, limit=2000):
     return [(row["payload"], row["updated_at"]) for row in rows]
 
 
-def fetch_rows(table, select="*", params="", limit=20000, page_size=1000):
+def fetch_rows(table, select="*", params="", limit=20000, page_size=1000, order=None):
     """Fetches raw rows from a table that does NOT follow the standard
     {id, payload jsonb, updated_at} shape - so far, only rdps_points (one
     real row per survey point: division, route, km, distance_m, lat, lon,
@@ -145,9 +145,35 @@ def fetch_rows(table, select="*", params="", limit=20000, page_size=1000):
     than `page_size` rows (the real end of the table), accumulating every
     page. `limit` is kept as an overall safety cap (stops paging once this
     many rows have been collected, even if more remain) rather than a
-    per-request value now."""
+    per-request value now.
+
+    Fixed 26-Nov-2026: found while building the new Infra Map feature
+    (pipeline/sources/infra_map.py) -- two back-to-back unfiltered fetches
+    of this same ~430,000-row table came back with a DIFFERENT division
+    split each time (221,326/162,063/47,000 vs. 184,442/195,879/50,068 -
+    same total, different per-division counts), and a set of station
+    codes confirmed present in the live data (KNP, MGD, GPB, SBH, BJP,
+    JRKT, SVNR, GIN, all Hubballi division) were silently MISSING from one
+    of the two fetches' results entirely. Root cause: offset/Range-based
+    pagination against a query with no `order=` clause has no guarantee
+    from Postgres that row order stays stable between separate requests
+    (no explicit sort = whatever order the query planner's scan happens
+    to produce, which can and does shift) - so paging through ~430 pages
+    this way can silently skip or duplicate rows at page boundaries,
+    differently on every call. This was already a live, if less visible,
+    risk for the Network Map tab's own build_stations_from_rdps() (it
+    keeps whichever occurrence of a station code happens to be read
+    first, so an unstable fetch order could already have been silently
+    varying which single survey reading won for a station from one
+    pipeline run to the next). `order`, when given (now always passed by
+    rdps_points.fetch_rows() as "division,route,km" - the natural sort
+    this data already implicitly assumes elsewhere, e.g. in route/track
+    reconstruction), makes every page's boundary deterministic, so the
+    full result is identical and complete regardless of how many pages
+    it takes or when it's fetched."""
     page_size = min(int(page_size), 1000)  # the server-side cap itself
-    base_url = f"{_base_url()}/rest/v1/{table}?select={select}{params}"
+    order_param = f"&order={order}" if order else ""
+    base_url = f"{_base_url()}/rest/v1/{table}?select={select}{params}{order_param}"
     rows = []
     offset = 0
     while True:

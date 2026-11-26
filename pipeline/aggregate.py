@@ -81,7 +81,7 @@ from sources import (
     exception_reports, indent_position, ioh_poh_planning, monthly_machine,
     shortfall_reasons, sidings_rest_house, tenders_contracts, unit_cost,
     action_plan_53, cumulative_failure, rdps_points, network_map,
-    daily_progress_srden,
+    daily_progress_srden, infra_map,
 )
 # hq_summary is deliberately NOT imported/fetched here - see the module
 # docstring above (01-Nov-2026, Shruti's explicit request; never consumed
@@ -545,9 +545,25 @@ def extract_raw_sources():
 # so the correct degrade-on-failure here is to simply omit the
 # `networkMap` key, not to crash the pipeline over a map refresh.
 # ---------------------------------------------------------------------
+# rdps_points.fetch_rows() with no division filter is the ~430,000-row,
+# ~2-minute fetch described in its own docstring. Cached here (separately
+# from _PAYLOAD_CACHE, which only covers the {payload jsonb} adapters) so
+# extract_infra_map() below -- added 26-Nov-2026, needs the exact same
+# rows for its own station-geo lookup -- reuses it instead of paying for
+# a second full fetch every run.
+_RDPS_ROWS_CACHE = None
+
+
+def _cached_rdps_rows():
+    global _RDPS_ROWS_CACHE
+    if _RDPS_ROWS_CACHE is None:
+        _RDPS_ROWS_CACHE = rdps_points.fetch_rows()
+    return _RDPS_ROWS_CACHE
+
+
 def extract_network_map():
     try:
-        rdps_rows = rdps_points.fetch_rows()
+        rdps_rows = _cached_rdps_rows()
     except Exception as e:
         log(f"WARN: rdps_points fetch failed ({e}) - 'networkMap' omitted from payload "
             f"(the website's baked-literal NMDATA fallback covers this).")
@@ -578,6 +594,45 @@ def extract_network_map():
         return network_map.build_network_map(rdps_rows, positions_payload, srden_payload)
     except Exception as e:
         log(f"WARN: network_map.build_network_map() failed ({e}) - 'networkMap' omitted from payload.")
+        return None
+
+
+_INFRA_SUPPLEMENT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'infra_supplement.json')
+
+
+def extract_infra_map():
+    """Added 26-Nov-2026 per Shruti's request for a new Infra tab map +
+    Sr.DEN breakdown (see claude/project-status.md section 3 and
+    sources/infra_map.py's own module docstring for the full design and
+    exactly which pieces are live vs. the static supplement file below).
+
+    Degrades to None (own try/except, same convention as
+    extract_network_map() above) rather than aborting the whole run --
+    losing this one new section on a bad day is far better than losing
+    the entire daily refresh over it."""
+    try:
+        rdps_rows = _cached_rdps_rows()
+        rdps_by_div = rdps_points.extract_points(rdps_rows)
+    except Exception as e:
+        log(f"WARN: rdps_points fetch failed ({e}) - 'infraMap' omitted from payload.")
+        return None
+    try:
+        payload = _cached_payload(sidings_rest_house)
+    except Exception as e:
+        log(f"WARN: sidings_rest_house fetch failed ({e}) - 'infraMap' omitted from payload.")
+        return None
+    supplement = None
+    try:
+        with open(_INFRA_SUPPLEMENT_FILE, encoding='utf-8') as f:
+            supplement = json.load(f)
+    except (OSError, ValueError) as e:
+        log(f"WARN: could not read {_INFRA_SUPPLEMENT_FILE} ({e}) - 'infraMap' will still be built "
+            f"from live data only (KPI figures fall back to the live, confirmed-incomplete "
+            f"masterSummary; strikeouts/depot/RB-target sections omitted).")
+    try:
+        return infra_map.build_infra_map(payload, rdps_by_div, supplement)
+    except Exception as e:
+        log(f"WARN: infra_map.build_infra_map() failed ({e}) - 'infraMap' omitted from payload.")
         return None
 
 
@@ -788,6 +843,7 @@ def run(outdir, as_of=None):
     unit_cost = extract_unit_cost(base)
     raw_sources = extract_raw_sources()
     network_map_payload = extract_network_map()
+    infra_map_payload = extract_infra_map()
 
     # Data-quality fix for ioh_poh_records' Division field: backfill from
     # the Cumulative Progress home-division map wherever the source
@@ -830,6 +886,13 @@ def run(outdir, as_of=None):
     else:
         log("WARN: 'networkMap' key omitted from payload (see extract_network_map()'s own WARN above; "
             "the website's baked NMDATA fallback will keep showing its last-known snapshot).")
+    if infra_map_payload:
+        p['infraMap'] = infra_map_payload
+        log(f"infraMap added to payload ({len(infra_map_payload['mapStations'])} station(s) placed, "
+            f"{len(infra_map_payload['unmappedStations'])} unmapped, "
+            f"{len(infra_map_payload['depots'])} sanctioned depot(s)).")
+    else:
+        log("WARN: 'infraMap' key omitted from payload (see extract_infra_map()'s own WARN above).")
 
     # ---- Sr.DEN rollups (build_srden_and_fixes.py equivalent) ----
     MONTH_ORDER = MONTH_NUM
