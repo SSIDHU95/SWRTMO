@@ -1684,8 +1684,31 @@ def run(outdir, as_of=None):
                     m['iohPohDays'] = m['iohPohTotalSpan']
 
     # ---- Fleet Health - IOH/POH Schedule ----
+    # Fixed 26-Nov-2026 (Shruti's report: every machine in the Fleet Health
+    # Sr.DEN Breakdown showed "Not currently mapped", all 10 MYS current-year
+    # events included even machines already marked Completed and presumably
+    # back in active service). Root cause: this only ever called
+    # lookup_srden(), which is built entirely from shortfall_records --
+    # always [] (Task #53, still open) -- so it could never find anything.
+    # The v4 fix above (14-Nov-2026, see its own comment) already added a
+    # second, independent fallback to daily_progress_srden_lookup (the live
+    # Daily Progress Sr.DEN sync Shruti set up) for progress.machines, but
+    # Fleet Health's own attach_srden() was never updated to use it too --
+    # this brings it in line with that same, already-working fallback.
+    # This also directly satisfies Shruti's stated requirement that Sr.DEN
+    # reflect wherever a machine is ACTUALLY working right now, not its home
+    # division: daily_progress_srden_sync.gs keys each machine's Sr.DEN off
+    # whichever division section it physically appears under in today's
+    # Daily Progress sheet, independent of the "division" field below (which
+    # stays the machine's home/parent division from the Progress 2026-2027
+    # sheet) -- so a Mysuru-home machine currently working under a different
+    # Sr.DEN jurisdiction will correctly show that jurisdiction here, nested
+    # under its home division in bySrden.
     def attach_srden(machine_name):
-        return lookup_srden(machine_name)
+        hit = lookup_srden(machine_name)
+        if hit:
+            return hit
+        return daily_progress_srden_lookup.get(ph.machine_key_aliased(ph.norm_machine(machine_name)))
 
     # Fixed 26-Nov-2026 per Shruti's Fleet Health rebuild request: this used
     # to come from ioh_poh_letter (a Word office letter with no live sync,
