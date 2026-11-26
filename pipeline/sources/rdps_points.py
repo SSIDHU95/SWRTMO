@@ -30,13 +30,19 @@ def fetch_rows(division=None):
     to a small fraction of one division. `limit` is now raised well past
     the real total (the fetch still stops as soon as a page comes back
     short, via the pagination fix in supabase_client.fetch_rows() itself,
-    so this is just a safety ceiling, not the actual request size)."""
+    so this is just a safety ceiling, not the actual request size).
+
+    Fixed 26-Nov-2026: passes a stable `order` through to
+    supabase_client.fetch_rows() now - see that function's own 26-Nov-2026
+    docstring entry for why an unordered paginated fetch of this many rows
+    could silently skip/duplicate rows (confirmed: it was)."""
     params = f"&division=eq.{division}" if division else ""
     return supabase_client.fetch_rows(
         TABLE,
         select="division,route,km,distance_m,lat,lon,station_code,station_name,review_notes",
         params=params,
         limit=500000,
+        order="division,route,km",
     )
 
 
