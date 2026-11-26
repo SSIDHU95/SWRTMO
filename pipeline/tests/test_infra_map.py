@@ -137,6 +137,45 @@ def synthetic_supplement():
     )
 
 
+class TestFeatureStatus(unittest.TestCase):
+    """_feature_status() priority within ONE feature (never blended
+    across features -- that's covered by TestBuildInfraMap instead)."""
+
+    def test_available_wins(self):
+        self.assertEqual(infra_map._feature_status(True, True, True), 'available')
+
+    def test_sanctioned_when_not_available(self):
+        self.assertEqual(infra_map._feature_status(False, True, True), 'sanctioned')
+
+    def test_proposed_when_only_proposed(self):
+        self.assertEqual(infra_map._feature_status(False, False, True), 'proposed')
+
+    def test_none_when_nothing_set(self):
+        self.assertIsNone(infra_map._feature_status(False, False, False))
+
+
+class TestStationCodeAlias(unittest.TestCase):
+    """Added 27-Nov-2026 per Shruti: 'E UBL is BMAP' -- a manual code
+    alias so this station resolves to a real RDPS position instead of
+    staying permanently unmapped."""
+
+    def test_e_ubl_resolves_via_bmap_alias(self):
+        rdps = synthetic_rdps_by_div()
+        rdps['UBL'].append(dict(route='UBL-LWR', km=5, distanceM=0, lat=15.33, lon=75.12,
+                                 stationCode='BMAP', stationName='Bellary Main Area Point', reviewNotes=None))
+        stations_geo = infra_map._build_stations_geo(rdps)
+        geo = infra_map._resolve_geo('E UBL', stations_geo)
+        self.assertIsNotNone(geo)
+        self.assertEqual(geo['lat'], 15.33)
+
+    def test_without_bmap_point_still_honestly_unmapped(self):
+        # No BMAP point in the plain fixture -- confirms the alias doesn't
+        # invent a position, it just gives the real one another name to
+        # match against when one exists.
+        stations_geo = infra_map._build_stations_geo(synthetic_rdps_by_div())
+        self.assertIsNone(infra_map._resolve_geo('E UBL', stations_geo))
+
+
 class TestSrdenDetailedDecoding(unittest.TestCase):
     """The live generic block-parser's key-naming scheme for this sheet."""
 
@@ -264,12 +303,18 @@ class TestBuildInfraMap(unittest.TestCase):
         self.assertIn('DWR', codes)
         self.assertIn('MGD', codes)
 
-    def test_proposed_only_station_never_on_map(self):
-        codes = {s['station'] for s in self.result['mapStations']} | \
-            {s['station'] for s in self.result['unmappedStations']}
-        # GNJ has a siding entry (proposed only) but no available/sanctioned
-        # flag, so it should be excluded entirely, not merely unmapped.
-        self.assertNotIn('GNJ', codes)
+    def test_proposed_only_station_now_counted_not_dropped(self):
+        # Fixed 27-Nov-2026 per Shruti ("the proposed ones you have shown
+        # as zero, which is incorrect"): a Proposed-only entry (no
+        # Available/Sanctioned flag at all) used to be silently excluded
+        # entirely -- not even counted as unmapped. It's a real pipeline
+        # stage now, so GNJ (siding Proposed-only, no RDPS point in this
+        # fixture) must show up in unmappedStations, not vanish.
+        unmapped_codes = {s['station'] for s in self.result['unmappedStations']}
+        self.assertIn('GNJ', unmapped_codes)
+        gnj = next(s for s in self.result['unmappedStations'] if s['station'] == 'GNJ')
+        self.assertEqual(gnj['sidingStatus'], 'proposed')
+        self.assertEqual(gnj['rhStatus'], 'proposed')
 
     def test_available_station_with_no_geo_is_unmapped_not_dropped(self):
         unmapped_codes = {s['station'] for s in self.result['unmappedStations']}
@@ -285,6 +330,21 @@ class TestBuildInfraMap(unittest.TestCase):
         depot = self.result['depots'][0]
         self.assertEqual(depot['station'], 'DWR')
         self.assertEqual(depot['lat'], 15.40)
+
+    def test_siding_and_rh_status_computed_independently(self):
+        # Added 27-Nov-2026 per Shruti: "sanctioned doesn't mean it is
+        # available... we need not merge both of these things." Each
+        # station's siding status and rest-house status must each come
+        # from only that feature's own flags.
+        by_station = {s['station']: s for s in self.result['mapStations']}
+        self.assertEqual(by_station['DWR']['sidingStatus'], 'available')
+        self.assertEqual(by_station['DWR']['rhStatus'], 'available')
+        self.assertTrue(by_station['DWR']['hasSiding'])
+        self.assertTrue(by_station['DWR']['hasRH'])
+        self.assertEqual(by_station['MGD']['sidingStatus'], 'sanctioned')
+        self.assertEqual(by_station['MGD']['rhStatus'], 'sanctioned')
+        self.assertEqual(by_station['SBC']['sidingStatus'], 'available')
+        self.assertEqual(by_station['SBC']['rhStatus'], 'available')
 
     def test_tracks_by_div_reuses_network_map_builder(self):
         # Added 26-Nov-2026 per Shruti's feature-parity request: the Infra
