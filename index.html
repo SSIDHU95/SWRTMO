@@ -2107,7 +2107,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="card" id="infraNoteCard" style="display:none;"></div>
     <div class="card">
       <h3>Infrastructure Planning &mdash; TM Sidings &amp; Rest Houses</h3>
-      <div class="cap">Division-wise, Sr.DEN-wise and CN-unit-wise status of track-machine sidings and rest houses across SWR &bull; factual snapshot from the SWR Sidings and Rest House workbook</div>
     </div>
     <div class="kpirow" id="infraKpiRow"></div>
 
@@ -2127,7 +2126,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <div id="infraMapWrap" style="display:none;">
         <div class="nm-toolbar">
           <div class="nm-chipgroup" id="infraMapDivChips"></div>
-          <select class="nm-select" id="infraMapTypeFilter"></select>
+          <select class="nm-select" id="infraMapFeatureFilter" title="Which feature"></select>
+          <select class="nm-select" id="infraMapStatusFilter" title="Which status"></select>
           <input class="nm-searchbox" id="infraMapSearchBox" placeholder="Search station or section&hellip;">
         </div>
         <div class="infra-map-frame">
@@ -2145,6 +2145,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <h3>Not mapped yet</h3>
       <div class="cap">Every station below has a TM siding / rest-house entry but could not be placed on the map yet (no surveyed or approximate position on record) &mdash; keep correcting the data and these will move onto the map above.</div>
       <div id="infraMapUnplacedList"></div>
+    </div>
+
+    <!-- Moved up to sit right after the map, per Shruti's 27-Nov-2026 request
+         ("provide me Sr.DEN-wise breakup immediately after the map"). Pure
+         repositioning -- renderInfraSrdenTable()/openInfraSrdenDrawer() read
+         this table by its element id regardless of where it sits in the DOM,
+         so no JS logic change was needed to move it. -->
+    <div class="card">
+      <div class="cardhead">
+        <div><h3>Sr.DEN &mdash; wise Breakdown</h3><div class="cap">Every Sr.DEN jurisdiction across all three divisions &bull; click a row for its stations</div></div>
+      </div>
+      <div class="tblwrap"><table id="infraSrdenTable"><thead><tr><th>Sr.DEN</th><th>Division</th><th class="num">Stations</th><th class="num">Siding Avail.</th><th class="num">Siding Sanc.</th><th class="num">Siding Prop.</th><th class="num">RH Avail.</th><th class="num">RH Pending</th></tr></thead><tbody></tbody></table></div>
     </div>
 
     <div class="card">
@@ -2165,12 +2177,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
       <div class="dsub-nav" id="infraRespToggle"></div>
       <div class="chartwrap" style="height:280px"><div id="infraRespChart" class="svgchart"></div></div>
-    </div>
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Sr.DEN &mdash; wise Breakdown</h3><div class="cap">Every Sr.DEN jurisdiction across all three divisions &bull; click a row for its stations</div></div>
-      </div>
-      <div class="tblwrap"><table id="infraSrdenTable"><thead><tr><th>Sr.DEN</th><th>Division</th><th class="num">Stations</th><th class="num">Siding Avail.</th><th class="num">Siding Sanc.</th><th class="num">Siding Prop.</th><th class="num">RH Avail.</th><th class="num">RH Pending</th></tr></thead><tbody></tbody></table></div>
     </div>
 
   </section>
@@ -5886,6 +5892,24 @@ const DIV_LABEL = {UBL:'Hubballi', SBC:'Bengaluru', MYS:'Mysuru'};
 
 function infraAvailable(){ return !!(DATA.infra && DATA.infra.stationRows); }
 function fmtReq(v){ return (v==null || v==='')? '—' : String(v); }
+// Fixed 27-Nov-2026 per Shruti: "map the 184 siding data with the master
+// summary sheet... only the top drawer part. Keep map logic as it." The
+// Master Summary sheet's live sync sometimes represents a combined figure
+// as the literal string "180+4" (two sub-categories added together in the
+// source workbook) rather than pre-summed -- that's fine, and left alone,
+// inside the map's own per-section drawers (fmtReq() still shows it as-is
+// there), but confusing on the top overview KPI tiles, which should show
+// the real total. sumParts() parses "180+4" -> 184; a plain number, or an
+// already-clean value, passes through unchanged.
+function sumParts(v){
+  if (v==null || v==='') return v;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (/^-?\d+(\.\d+)?$/.test(s)) return v;
+  const parts = s.split('+').map(p=>parseFloat(p.trim()));
+  if (parts.length > 1 && parts.every(n=>!isNaN(n))) return parts.reduce((a,b)=>a+b, 0);
+  return v;
+}
 function infraStatusBadgeClass(s){
   if (s==='Available' || s==='Available and Sanctioned') return 'good';
   if (s==='Proposed') return 'warn';
@@ -5894,15 +5918,12 @@ function infraStatusBadgeClass(s){
 }
 
 function renderInfraNote(){
+  // Removed 27-Nov-2026 per Shruti: "I don't want these two lines: 'note
+  // from source work' and 'infrastructure line.' It is self-understood."
+  // This card always stays hidden now; left as a no-op (rather than deleted
+  // outright) so a future, genuinely new note type could reuse the element.
   const card = document.getElementById('infraNoteCard');
-  if (!card) return;
-  const infra = DATA.infra;
-  if (infra && infra.note){
-    card.style.display = '';
-    card.innerHTML = `<h3>Note from the Source Workbook</h3><div class="cap" style="margin-bottom:0; white-space:pre-wrap;">${esc(infra.note)}</div>`;
-  } else {
-    card.style.display = 'none';
-  }
+  if (card) card.style.display = 'none';
 }
 
 function renderInfraKpis(){
@@ -5941,8 +5962,8 @@ function renderInfraKpis(){
   const rhSwr = (im && im.kpi && im.kpi.restHouse) || rh.swr;
   const kpis = [
     {l:'Stations Covered', v: infra.stationRows.length, hint:'with a TM siding / rest-house entry, SWR-wide', fn:()=>openInfraSourceDrawer()},
-    {l:'TM Sidings Available', v: fmtReq(sdSwr.available), hint:`of ${fmtReq(sdSwr.required)} required &bull; ${fmtReq(sdSwr.sanctioned)} sanctioned, ${fmtReq(sdSwr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
-    {l:'Rest Houses Available', v: fmtReq(rhSwr.available), hint:`of ${fmtReq(rhSwr.required)} required &bull; ${fmtReq(rhSwr.sanctioned)} sanctioned, ${fmtReq(rhSwr.proposed)} proposed`, fn:()=>openInfraSourceDrawer()},
+    {l:'TM Sidings Available', v: fmtReq(sumParts(sdSwr.available)), hint:`of ${fmtReq(sumParts(sdSwr.required))} required &bull; ${fmtReq(sumParts(sdSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(sdSwr.proposed))} proposed`, fn:()=>openInfraSourceDrawer()},
+    {l:'Rest Houses Available', v: fmtReq(sumParts(rhSwr.available)), hint:`of ${fmtReq(sumParts(rhSwr.required))} required &bull; ${fmtReq(sumParts(rhSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(rhSwr.proposed))} proposed`, fn:()=>openInfraSourceDrawer()},
     {l:'FY 26-27 Siding Target', v: `${st.completedCount}/${st.total}`, hint:`completed SWR-wide as of ${esc(st.completedAsOf||'—')}`, fn:()=>openInfraTargetDrawer('sidings')},
     {l:'Satellite Depots', v: satDepotVal, hint: satDepotHint, fn:()=>openInfraSatDepotKpiDrawer()},
     {l:'Pending — CN Units', v: (infra.responsibility.overall['CN (Construction Org)']||0), hint:'stations awaiting the Construction Organisation', fn:()=>openInfraRespDrawer('CN (Construction Org)', null)},
@@ -6489,24 +6510,20 @@ function openInfraSourceDrawer(){
 // =====================================================================
 function infraMapAvailable(){ return !!(DATA.infraMap && (DATA.infraMap.mapStations||[]).length); }
 
-function infraMapStationStatus(r){
-  if (r.struck) return {code:'struck', label:'Struck Out / Withdrawn', color:'#94A3B8'};
-  if (r.sidingAvailTM || r.sidingAvailRGM || r.rhAvail) return {code:'available', label:'Available', color: cssVar('--good')};
-  if (r.sidingSancTM || r.sidingSancRGM || r.rhSanc) return {code:'sanctioned', label:'Sanctioned', color: cssVar('--warn')};
-  if (r.sidingPropTM || r.sidingPropRGM || r.rhProp) return {code:'proposed', label:'Proposed', color: cssVar('--steel-2')};
-  return {code:'unclear', label:'Status unclear', color:'#94A3B8'};
-}
-// Added 26-Nov-2026 per Shruti's feature-parity request: a station marker
-// now needs to say THREE things at once (division, feature, status) --
-// this picks which of the 3 "feature" symbols a station gets (colour =
-// division and ring = status are applied separately in infraMapIconHtml()).
-function infraMapCategory(r){
-  const hasSiding = r.sidingAvailTM || r.sidingSancTM || r.sidingPropTM || r.sidingAvailRGM || r.sidingSancRGM || r.sidingPropRGM;
-  const hasRH = r.rhAvail || r.rhSanc || r.rhProp;
-  if (hasSiding && hasRH) return 'both';
-  if (hasRH) return 'resthouse';
-  return 'siding';
-}
+// Fixed 27-Nov-2026 per Shruti: "sanctioned doesn't mean it is available...
+// we need not merge both of these things." Siding status and Rest House
+// status now arrive ALREADY computed, separately, from the pipeline
+// (r.sidingStatus / r.rhStatus -- see sources/infra_map.py's
+// _feature_status()) -- this module no longer blends TM+RGM+RH flags into
+// one combined per-station status the way its first version did, and no
+// longer treats "struck" as a status of its own (it stays a separate
+// boolean, surfaced only in the station drawer's own text note below).
+const IM_STATUS_META = {
+  available:  {label:'Available',  color: cssVar('--good')},
+  sanctioned: {label:'Sanctioned', color: cssVar('--warn')},
+  proposed:   {label:'Proposed',   color: cssVar('--steel-2')},
+};
+function imStatusMeta(code){ return IM_STATUS_META[code] || {label:'—', color:'#94A3B8'}; }
 
 // Deliberately separate SVG constants from the Overview map's own
 // TAMPING_GLYPH/NONTAMPING_GLYPH/DEPOT_GLYPH (those live in the OTHER
@@ -6526,23 +6543,69 @@ function imGlyphSvg(cat){
   const g = cat==='resthouse' ? IM_RH_GLYPH : cat==='both' ? IM_BOTH_GLYPH : cat==='depot' ? IM_DEPOT_GLYPH : IM_SIDING_GLYPH;
   return `<svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">${g}</svg>`;
 }
-function infraMapIconHtml(cat, status, div){
+function infraMapIconHtml(cat, div, statusCode){
   const color = (DATA.infraMap && DATA.infraMap.divColor && DATA.infraMap.divColor[div]) || '#334155';
+  const ring = imStatusMeta(statusCode).color;
   const shapeCls = cat==='depot' ? ' im-depot' : '';
-  const struckCls = status.code==='struck' ? ' struck' : '';
-  return `<div class="stn-badge${shapeCls}${struckCls}" style="background:${color}; box-shadow:0 2px 6px rgba(15,23,42,.35), 0 0 0 3px ${status.color} inset;">${imGlyphSvg(cat)}</div>`;
+  return `<div class="stn-badge${shapeCls}" style="background:${color}; box-shadow:0 2px 6px rgba(15,23,42,.35), 0 0 0 3px ${ring} inset;">${imGlyphSvg(cat)}</div>`;
 }
 
 let infraMapInited = false, infraMapInstance = null;
 let infraMapMarkerLayer, infraMapPolyLayers = {}, infraMapAllMarkers = [];
 const infraMapActiveDivs = new Set(['UBL','SBC','MYS']);
-let infraMapActiveFilter = 'all';
+// Replaced 27-Nov-2026 per Shruti's correction: "Available, sanctioned,
+// proposed as one dropdown... the other dropdown as track machine siding,
+// rest house, and satellite depot... we will get different combinations" --
+// two INDEPENDENT filters (what kind of thing x what stage it's at) in
+// place of the old single combined `infraMapActiveFilter`.
+let infraMapActiveFeature = 'all'; // 'all' | 'siding' | 'resthouse' | 'depot'
+let infraMapActiveStatus  = 'all'; // 'all' | 'available' | 'sanctioned' | 'proposed'
 
-function infraMapMatchesFilter(s){
-  if (infraMapActiveFilter === 'all') return true;
-  if (infraMapActiveFilter.indexOf('feat:') === 0) return s.cat === infraMapActiveFilter.slice(5);
-  if (infraMapActiveFilter.indexOf('status:') === 0) return s.status.code === infraMapActiveFilter.slice(7);
-  return true;
+function infraMapMatchesFilters(s){
+  if (s.isDepot){
+    if (infraMapActiveFeature !== 'all' && infraMapActiveFeature !== 'depot') return false;
+    return infraMapActiveStatus === 'all' || infraMapActiveStatus === 'sanctioned';
+  }
+  if (infraMapActiveFeature === 'depot') return false;
+  if (infraMapActiveFeature === 'siding'){
+    if (!s.hasSiding) return false;
+    return infraMapActiveStatus === 'all' || s.sidingStatus === infraMapActiveStatus;
+  }
+  if (infraMapActiveFeature === 'resthouse'){
+    if (!s.hasRH) return false;
+    return infraMapActiveStatus === 'all' || s.rhStatus === infraMapActiveStatus;
+  }
+  // feature = 'all': match if EITHER feature satisfies the selected status
+  // (never pre-merge the two into one blended status -- that's the exact
+  // thing Shruti asked us to stop doing).
+  if (infraMapActiveStatus === 'all') return s.hasSiding || s.hasRH;
+  return (s.hasSiding && s.sidingStatus === infraMapActiveStatus) || (s.hasRH && s.rhStatus === infraMapActiveStatus);
+}
+
+// Which shape + ring colour a marker gets depends on which feature filter
+// is active: with one feature selected, show THAT feature's own status;
+// with "All features" selected, fall back to a combined shape (siding-only
+// / resthouse-only / both) with the ring defaulting to the siding status
+// when present (siding is listed as feature #1), else the RH status --
+// still never averaging or merging the two codes into a third status.
+function infraMapEffectiveVisual(s){
+  if (s.isDepot) return {cat:'depot', statusCode:'sanctioned'};
+  if (infraMapActiveFeature === 'siding') return {cat:'siding', statusCode: s.sidingStatus};
+  if (infraMapActiveFeature === 'resthouse') return {cat:'resthouse', statusCode: s.rhStatus};
+  const cat = (s.hasSiding && s.hasRH) ? 'both' : s.hasSiding ? 'siding' : 'resthouse';
+  const statusCode = s.hasSiding ? s.sidingStatus : s.rhStatus;
+  return {cat, statusCode};
+}
+
+function infraMapRenderMarkerVisual(marker){
+  const s = marker._im;
+  const vis = infraMapEffectiveVisual(s);
+  marker.setIcon(L.divIcon({html: infraMapIconHtml(vis.cat, s.div, vis.statusCode), className:'', iconSize:[24,24], iconAnchor:[12,12]}));
+  const tipStatus = s.isDepot ? 'Satellite Depot (sanctioned)' : imStatusMeta(vis.statusCode).label;
+  marker.bindTooltip(
+    `<b>${esc(s.code)}</b> — ${esc(tipStatus)}<span class="tip-src">${esc(DIV_LABEL[s.div]||s.div)}${s.srden?(' &bull; '+esc(s.srden)):''}</span>`,
+    {className:'swr-tip', direction:'top', offset:[0,-14]}
+  );
 }
 
 function buildInfraMapMarkers(){
@@ -6551,36 +6614,30 @@ function buildInfraMapMarkers(){
   const im = DATA.infraMap;
   (im.mapStations||[]).forEach(r=>{
     if (r.lat==null || r.lon==null) return;
-    const cat = infraMapCategory(r);
-    const status = infraMapStationStatus(r);
-    const marker = L.marker([r.lat, r.lon], {
-      icon: L.divIcon({html: infraMapIconHtml(cat, status, r.division), className:'', iconSize:[24,24], iconAnchor:[12,12]})
-    });
-    marker.bindTooltip(
-      `<b>${esc(r.station)}</b> — ${esc(status.label)}<span class="tip-src">${esc(DIV_LABEL[r.division]||r.division)} &bull; ${esc(r.srdenRaw||'')}</span>`,
-      {className:'swr-tip', direction:'top', offset:[0,-14]}
-    );
+    const marker = L.marker([r.lat, r.lon]);
     marker.on('click', ()=> openInfraMapStationDrawer(r));
-    marker._im = {div:r.division, cat, status, code:r.station||'', section:r.section||'', srden:r.srdenRaw||''};
+    marker._im = {
+      div:r.division, isDepot:false,
+      hasSiding: !!r.hasSiding, hasRH: !!r.hasRH, sidingStatus: r.sidingStatus, rhStatus: r.rhStatus,
+      code:r.station||'', section:r.section||'', srden:r.srdenRaw||'',
+    };
     infraMapAllMarkers.push(marker);
   });
   (im.depots||[]).forEach(d=>{
     if (d.lat==null || d.lon==null) return;
-    const status = {code:'sanctioned', label:'Sanctioned', color: cssVar('--warn')};
     const marker = L.marker([d.lat, d.lon], {
-      icon: L.divIcon({html: infraMapIconHtml('depot', status, d.division), className:'', iconSize:[24,24], iconAnchor:[12,12]}),
       // High zIndexOffset: Leaflet otherwise stacks markers purely by
       // latitude, so a depot marker can end up buried under overlapping
       // station markers and become unclickable -- these 3 are high-value
       // and should always be reachable on top.
       zIndexOffset: 1000,
     });
-    marker.bindTooltip(
-      `<b>${esc(d.station)}</b> — Satellite Depot (sanctioned)<span class="tip-src">${esc(DIV_LABEL[d.division]||d.division)}</span>`,
-      {className:'swr-tip', direction:'top', offset:[0,-14]}
-    );
     marker.on('click', ()=> openInfraDepotDrawer(d));
-    marker._im = {div:d.division, cat:'depot', status, code:d.station||'', section:d.description||'', srden:d.jurisdictionRaw||''};
+    marker._im = {
+      div:d.division, isDepot:true,
+      hasSiding:false, hasRH:false, sidingStatus:null, rhStatus:null,
+      code:d.station||'', section:d.description||'', srden:d.jurisdictionRaw||'',
+    };
     infraMapAllMarkers.push(marker);
   });
   applyInfraMapFilters();
@@ -6594,7 +6651,10 @@ function applyInfraMapFilters(){
   infraMapMarkerLayer.clearLayers();
   infraMapAllMarkers.forEach(m=>{
     const s = m._im;
-    if (infraMapActiveDivs.has(s.div) && infraMapMatchesFilter(s)) m.addTo(infraMapMarkerLayer);
+    if (infraMapActiveDivs.has(s.div) && infraMapMatchesFilters(s)){
+      infraMapRenderMarkerVisual(m);
+      m.addTo(infraMapMarkerLayer);
+    }
   });
 }
 
@@ -6643,28 +6703,66 @@ function renderInfraMapChips(){
   }
 }
 
-function renderInfraMapTypeFilter(){
-  const sel = document.getElementById('infraMapTypeFilter');
-  if (!sel) return;
+// Replaced 27-Nov-2026 per Shruti's correction -- see infraMapMatchesFilters()
+// above. Options rebuild on every renderInfraMap() AND whenever the feature
+// filter changes (so the status counts reflect the currently-selected
+// feature); the change listeners are wired ONCE in wireInfraMapFilterSelects()
+// so rebuilding the <option> list here never re-stacks duplicate listeners.
+function infraMapAllItems(){
   const im = DATA.infraMap || {};
-  const items = (im.mapStations||[]).map(r=> ({cat:infraMapCategory(r), status:infraMapStationStatus(r)}))
-    .concat((im.depots||[]).map(()=> ({cat:'depot', status:{code:'sanctioned'}})));
-  const count = pred => items.filter(pred).length;
-  let html = `<option value="all">All features (${items.length})</option>`;
-  html += '<optgroup label="By feature">';
-  html += `<option value="feat:siding">TM / RGM Siding only (${count(i=>i.cat==='siding')})</option>`;
-  html += `<option value="feat:resthouse">Rest House only (${count(i=>i.cat==='resthouse')})</option>`;
-  html += `<option value="feat:both">Siding &amp; Rest House (${count(i=>i.cat==='both')})</option>`;
-  html += `<option value="feat:depot">Satellite Depot (${count(i=>i.cat==='depot')})</option>`;
-  html += '</optgroup><optgroup label="By status">';
-  html += `<option value="status:available">Available (${count(i=>i.status.code==='available')})</option>`;
-  html += `<option value="status:sanctioned">Sanctioned (${count(i=>i.status.code==='sanctioned')})</option>`;
-  html += `<option value="status:proposed">Proposed (${count(i=>i.status.code==='proposed')})</option>`;
-  html += `<option value="status:struck">Struck Out / Withdrawn (${count(i=>i.status.code==='struck')})</option>`;
-  html += '</optgroup>';
-  sel.innerHTML = html;
-  sel.value = infraMapActiveFilter;
-  sel.addEventListener('change', ()=>{ infraMapActiveFilter = sel.value; applyInfraMapFilters(); });
+  const stationItems = (im.mapStations||[]).map(r=> ({isDepot:false, hasSiding:!!r.hasSiding, hasRH:!!r.hasRH, sidingStatus:r.sidingStatus, rhStatus:r.rhStatus}));
+  const depotItems = (im.depots||[]).map(()=> ({isDepot:true, hasSiding:false, hasRH:false, sidingStatus:null, rhStatus:null}));
+  return stationItems.concat(depotItems);
+}
+function infraMapFeatureCount(items, feature){
+  if (feature === 'depot') return items.filter(i=>i.isDepot).length;
+  if (feature === 'siding') return items.filter(i=>!i.isDepot && i.hasSiding).length;
+  if (feature === 'resthouse') return items.filter(i=>!i.isDepot && i.hasRH).length;
+  return items.length;
+}
+function infraMapStatusCount(items, feature, status){
+  return items.filter(i=>{
+    if (feature === 'depot') return i.isDepot && (status==='all' || status==='sanctioned');
+    if (i.isDepot) return false;
+    if (feature === 'siding') return i.hasSiding && (status==='all' || i.sidingStatus===status);
+    if (feature === 'resthouse') return i.hasRH && (status==='all' || i.rhStatus===status);
+    if (status === 'all') return i.hasSiding || i.hasRH;
+    return (i.hasSiding && i.sidingStatus===status) || (i.hasRH && i.rhStatus===status);
+  }).length;
+}
+function renderInfraMapFeatureFilter(){
+  const sel = document.getElementById('infraMapFeatureFilter');
+  if (!sel) return;
+  const items = infraMapAllItems();
+  sel.innerHTML = `<option value="all">All features (${items.length})</option>`
+    + `<option value="siding">TM / RGM Siding (${infraMapFeatureCount(items,'siding')})</option>`
+    + `<option value="resthouse">Rest House (${infraMapFeatureCount(items,'resthouse')})</option>`
+    + `<option value="depot">Satellite Depot (${infraMapFeatureCount(items,'depot')})</option>`;
+  sel.value = infraMapActiveFeature;
+}
+function renderInfraMapStatusFilter(){
+  const sel = document.getElementById('infraMapStatusFilter');
+  if (!sel) return;
+  const items = infraMapAllItems();
+  const f = infraMapActiveFeature;
+  sel.innerHTML = `<option value="all">All statuses (${infraMapStatusCount(items,f,'all')})</option>`
+    + `<option value="available">Available (${infraMapStatusCount(items,f,'available')})</option>`
+    + `<option value="sanctioned">Sanctioned (${infraMapStatusCount(items,f,'sanctioned')})</option>`
+    + `<option value="proposed">Proposed (${infraMapStatusCount(items,f,'proposed')})</option>`;
+  sel.value = infraMapActiveStatus;
+}
+function wireInfraMapFilterSelects(){
+  const featSel = document.getElementById('infraMapFeatureFilter');
+  const statSel = document.getElementById('infraMapStatusFilter');
+  if (featSel) featSel.addEventListener('change', ()=>{
+    infraMapActiveFeature = featSel.value;
+    renderInfraMapStatusFilter();
+    applyInfraMapFilters();
+  });
+  if (statSel) statSel.addEventListener('change', ()=>{
+    infraMapActiveStatus = statSel.value;
+    applyInfraMapFilters();
+  });
 }
 
 function renderInfraMapSrdenJump(){
@@ -6704,7 +6802,6 @@ function renderInfraMapLegend(){
   html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--good')};"></span><span class="nm-leg-label">Available</span></div>`;
   html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--warn')};"></span><span class="nm-leg-label">Sanctioned</span></div>`;
   html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--steel-2')};"></span><span class="nm-leg-label">Proposed</span></div>`;
-  html += `<div class="nm-leg-row"><span class="stn-badge struck" style="position:static; width:16px; height:16px; background:#334155;"></span><span class="nm-leg-label">Struck Out / Withdrawn (dashed ring)</span></div>`;
   box.innerHTML = html;
 }
 
@@ -6733,14 +6830,14 @@ function renderInfraMapUnplaced(){
   const unmapped = ((DATA.infraMap||{}).unmappedStations) || [];
   if (!unmapped.length){ card.style.display = 'none'; return; }
   card.style.display = '';
-  const catLabel = {siding:'TM / RGM Siding', resthouse:'Rest House', both:'Siding &amp; Rest House'};
   document.getElementById('infraMapUnplacedList').innerHTML = unmapped.map(r=>{
-    const cat = infraMapCategory(r);
-    const status = infraMapStationStatus(r);
+    const parts = [];
+    if (r.hasSiding) parts.push('Siding: '+esc(imStatusMeta(r.sidingStatus).label));
+    if (r.hasRH) parts.push('Rest House: '+esc(imStatusMeta(r.rhStatus).label));
     return `
     <div class="nm-unplaced-row">
       <div><b>${esc(r.station)}</b> &mdash; ${esc(DIV_LABEL[r.division]||r.division)} &bull; ${esc(r.srdenRaw||'—')}${r.section?(' &bull; '+esc(r.section)):''}
-        <div style="color:var(--muted); font-size:11px; margin-top:2px;">${catLabel[cat]||'—'} &bull; ${esc(status.label)}</div></div>
+        <div style="color:var(--muted); font-size:11px; margin-top:2px;">${parts.join(' &bull; ')||'—'}</div></div>
       <div class="reason">No surveyed or approximate position on record yet</div>
     </div>`;
   }).join('');
@@ -6763,7 +6860,8 @@ function renderInfraMap(){
     + ` &bull; ${im.depots.length} satellite depot proposal(s) &bull; as of ${esc(im.asOf||'—')}`;
 
   renderInfraMapChips();
-  renderInfraMapTypeFilter();
+  renderInfraMapFeatureFilter();
+  renderInfraMapStatusFilter();
   renderInfraMapSrdenJump();
   renderInfraMapLegend();
   renderInfraMapUnplaced();
@@ -6777,6 +6875,7 @@ function renderInfraMap(){
   const el = document.getElementById('infraMap');
   if (!el || typeof L === 'undefined') return;
   infraMapInited = true;
+  wireInfraMapFilterSelects();
   infraMapInstance = L.map('infraMap', {scrollWheelZoom:true}).setView([14.6, 76.0], 7);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 17, attribution: 'Esri, HERE, Garmin &copy; OpenStreetMap contributors'
@@ -6797,13 +6896,46 @@ function renderInfraMap(){
   setTimeout(()=>{ if (infraMapInstance) infraMapInstance.invalidateSize(); }, 80);
 }
 
+// Cross-reference helpers (added 27-Nov-2026 per Shruti: "brainstorm and
+// make the drawers interconnected") -- a station and a sanctioned satellite
+// depot can share the same division+station code; these let each drawer
+// link straight to the other instead of making her search for it herself.
+function findInfraStationAt(division, station){
+  const im = DATA.infraMap || {};
+  return (im.mapStations||[]).find(r=>r.division===division && r.station===station)
+      || (im.unmappedStations||[]).find(r=>r.division===division && r.station===station)
+      || null;
+}
+function findInfraDepotsAt(division, station){
+  const im = DATA.infraMap || {};
+  return (im.depots||[]).filter(d=>d.division===division && d.station===station);
+}
+// Reachable from inline onclick="" in drawer HTML strings (same pattern as
+// other inline handlers already in this file, e.g. NM.closeDrawer()).
+function infraMapOpenStationByCode(division, code){
+  const r = findInfraStationAt(division, code);
+  if (r) openInfraMapStationDrawer(r);
+}
+function infraMapStatusBadgeHtml(label, code){
+  const meta = imStatusMeta(code);
+  const cls = code==='available' ? 'good' : code==='sanctioned' ? 'warn' : 'neutral';
+  return `<span class="pill ${cls}">${esc(label)}: ${esc(meta.label)}</span>`;
+}
+
 function infraMapYn(v){ return v? '✓' : '—'; }
 function openInfraMapStationDrawer(r){
-  const st = infraMapStationStatus(r);
   let html = statRow([
     {l:'Division', v: esc(DIV_LABEL[r.division]||r.division||'—')}, {l:'Sr.DEN', v: esc(r.srdenRaw||'—')},
     {l:'Section', v: esc(r.section||'—')}, {l:'Km', v: r.km??'—'},
   ]);
+  // Clear top-level status summary (added 27-Nov-2026 per Shruti: "when I
+  // click over a station which has sanctioned track machine siding, I need
+  // the exact status there itself") -- Siding and Rest House each get their
+  // OWN badge, never merged into one combined line.
+  const summaryBadges = [];
+  if (r.hasSiding) summaryBadges.push(infraMapStatusBadgeHtml('TM / RGM Siding', r.sidingStatus));
+  if (r.hasRH) summaryBadges.push(infraMapStatusBadgeHtml('Rest House', r.rhStatus));
+  if (summaryBadges.length) html += `<div class="dcap" style="margin:8px 0 10px; display:flex; gap:8px; flex-wrap:wrap;">${summaryBadges.join('')}</div>`;
   html += dcard('TM Siding', null, statRow([
     {l:'Available', v: infraMapYn(r.sidingAvailTM), cls: r.sidingAvailTM?'good':''},
     {l:'Sanctioned', v: infraMapYn(r.sidingSancTM), cls: r.sidingSancTM?'warn':''},
@@ -6819,16 +6951,31 @@ function openInfraMapStationDrawer(r){
     {l:'Sanctioned', v: infraMapYn(r.rhSanc), cls: r.rhSanc?'warn':''},
     {l:'Proposed', v: infraMapYn(r.rhProp)},
   ]));
+  const depotsHere = findInfraDepotsAt(r.division, r.station);
+  if (depotsHere.length) html += dcard('Satellite Depot at this station', 'click for the full sanctioned-depot status note', depotsHere.map(d=>
+    breakRow(d.description||'Satellite Depot', (d.status||'').slice(0,90)+((d.status||'').length>90?'…':''), 'Sanctioned', null, ()=>openInfraDepotDrawer(d))
+  ).join(''));
   if (r.remark) html += dcard('Remark', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(r.remark)}</div>`);
   if (r.struck) html += `<div class="dcap" style="color:var(--warn);">Shown struck through in the source workbook — treat as withdrawn/superseded, not an active entry.</div>`;
   html += `<div class="dcap">As of ${esc((DATA.infraMap&&DATA.infraMap.asOf)||'—')}${r.interSidingDistance!=null?(' &bull; Inter-siding distance: '+esc(r.interSidingDistance)):''}</div>`;
-  openDrawer(r.station, `${esc(DIV_LABEL[r.division]||r.division||'')} &bull; ${esc(r.srdenRaw||'')} &bull; ${esc(st.label)}`, html);
+  const titleBits = [];
+  if (r.hasSiding) titleBits.push('Siding '+imStatusMeta(r.sidingStatus).label);
+  if (r.hasRH) titleBits.push('RH '+imStatusMeta(r.rhStatus).label);
+  openDrawer(r.station, `${esc(DIV_LABEL[r.division]||r.division||'')} &bull; ${esc(r.srdenRaw||'')} &bull; ${esc(titleBits.join(' / ')||'—')}`, html);
 }
 
 function openInfraDepotDrawer(d){
-  const html = statRow([
+  let html = statRow([
     {l:'Division', v: esc(DIV_LABEL[d.division]||d.division||'—')}, {l:'Sr.DEN', v: esc(d.jurisdictionRaw||'—')},
   ]) + dcard(d.description||'Satellite Depot', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(d.status||'—')}</div>`);
+  const stationHere = findInfraStationAt(d.division, d.station);
+  if (stationHere){
+    const bits = [];
+    if (stationHere.hasSiding) bits.push('Siding: '+esc(imStatusMeta(stationHere.sidingStatus).label));
+    if (stationHere.hasRH) bits.push('Rest House: '+esc(imStatusMeta(stationHere.rhStatus).label));
+    html += dcard('This station also has TM Siding / Rest House data', null,
+      breakRow(stationHere.station, bits.join(' &bull; ')||'click to view full station detail', 'View', null, ()=>openInfraMapStationDrawer(stationHere)));
+  }
   openDrawer(d.station, 'Satellite Track Machine Depot — sanctioned, under execution', html);
 }
 
@@ -6848,10 +6995,19 @@ function openInfraSatDepotKpiDrawer(){
 // division's own drawer (openInfraDivisionDrawer() above) alongside the
 // existing coarser Sr.DEN-jurisdiction list: this one carries live remarks
 // and strikeout flags the older DATA.infra.srdenTable doesn't.
-function infraMapSectionBlockHtml(blk, label){
+function infraMapSectionBlockHtml(blk, label, div){
   if (!blk) return '';
   const struck = new Set(blk.struckStations||[]);
-  const listLine = (lbl, codes)=> codes.length? `<div class="dcap" style="margin-top:4px;">${lbl}: ${codes.map(c=>esc(c)+(struck.has(c)?' <span class="pill neutral">struck</span>':'')).join(', ')}</div>` : '';
+  // Station codes are clickable (added 27-Nov-2026 per Shruti: "there should
+  // be clickable divisional data further") -- opens that station's own full
+  // drawer, looked up by division+code, when the station is known to the map.
+  const codeChip = (c)=>{
+    const struckTag = struck.has(c) ? ' <span class="pill neutral">struck</span>' : '';
+    const found = div && findInfraStationAt(div, c);
+    if (found) return `<span class="imm-link" onclick="infraMapOpenStationByCode('${esc(div)}','${esc(c)}')" style="cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">${esc(c)}</span>${struckTag}`;
+    return esc(c)+struckTag;
+  };
+  const listLine = (lbl, codes)=> codes.length? `<div class="dcap" style="margin-top:4px;">${lbl}: ${codes.map(codeChip).join(', ')}</div>` : '';
   return dcard(label, null, statRow([
     {l:'Required', v: fmtReq(blk.required)}, {l:'Available', v: fmtReq(blk.available)},
     {l:'Sanctioned', v: fmtReq(blk.sanctioned)}, {l:'Proposed', v: fmtReq(blk.proposed)},
@@ -6865,7 +7021,7 @@ function openInfraMapSectionDrawer(div, slNo){
   let html = statRow([
     {l:'Sr.DEN', v: esc(s.srden||'—')}, {l:'Section length', v: s.sectionLength??'—'}, {l:'Stations', v: s.stations??'—'},
   ]);
-  html += infraMapSectionBlockHtml(s.tm, 'TM Siding') + infraMapSectionBlockHtml(s.rgm, 'RGM Siding') + infraMapSectionBlockHtml(s.rh, 'Rest House');
+  html += infraMapSectionBlockHtml(s.tm, 'TM Siding', div) + infraMapSectionBlockHtml(s.rgm, 'RGM Siding', div) + infraMapSectionBlockHtml(s.rh, 'Rest House', div);
   openDrawer(s.majorSection || ('Section '+s.slNo), `${esc(DIV_LABEL[div]||div)} &bull; ${esc(s.srden||'')}`, html);
 }
 function infraMapSrdenCardHtml(div){
