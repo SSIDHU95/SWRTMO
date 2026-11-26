@@ -1247,11 +1247,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   /* Infrastructure Planning map (added 26-Nov-2026) -- same visual language as
      the Overview tab's Network Map (#nmMapwrap/#nmMap) above, kept as its own
-     rule block since it's a separate Leaflet instance on a separate tab. */
+     rule block since it's a separate Leaflet instance on a separate tab.
+     Upgraded to full feature-parity with that map on 26-Nov-2026 (per
+     Shruti: "why have you not shown the track as shown in the overview
+     page... different symbols for sidings, rest house and depots...
+     different divisions show in different colour... option to hide other
+     features... dropdown for different features and different sr dens...
+     if something not mapped, show at the bottom") -- reuses .nm-chip/
+     .nm-select/.nm-searchbox/.nm-mapfloat/.nm-leg-row/.nm-divjump/.nm-divbtn/
+     .nm-srdenbtn/.nm-jumplabel/.nm-unplaced-row as-is; only the two rules
+     below (.im-depot shape, .struck status ring) are genuinely new. */
   .infra-map-frame{position:relative; isolation:isolate; border-radius:14px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow-md);}
   #infraMap{height:56vh; min-height:420px; width:100%; background:#E2E8F0;}
-  .infra-map-legend{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:10px;}
-  .infra-map-legend span{display:flex; align-items:center; gap:6px; font-size:11.5px; color:#0F172A;}
+  #infraMapLegendBox{bottom:14px; left:14px; max-width:235px;}
+  .stn-badge.im-depot{border-radius:8px;}
+  .stn-badge.struck{border-style:dashed; opacity:.62;}
   #nmLegendBox{bottom:14px; left:14px; max-width:230px;}
   #nmLegendBox h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#94A3B8; margin:0 0 7px;}
   .nm-leg-row{display:flex; align-items:center; gap:7px; margin:4px 0;}
@@ -2112,18 +2122,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
          this map or inside each division's drawer below. -->
     <div class="card">
       <div class="cardhead">
-        <div><h3>Sidings, Rest Houses &amp; Satellite Depots &mdash; Map</h3><div class="cap" id="infraMapCap">Every surveyed station with a TM siding / rest-house / satellite-depot entry &bull; click a marker for full detail</div></div>
+        <div><h3>Sidings, Rest Houses &amp; Satellite Depots &mdash; Map</h3><div class="cap" id="infraMapCap">Every surveyed station with a TM siding / rest-house / satellite-depot entry &bull; colour = division, symbol = feature, ring = status &bull; click a marker for full detail</div></div>
       </div>
       <div id="infraMapWrap" style="display:none;">
-        <div class="infra-map-legend">
-          <span><span class="nm-leg-div-dot" style="background:var(--good);"></span>Available</span>
-          <span><span class="nm-leg-div-dot" style="background:var(--warn);"></span>Sanctioned</span>
-          <span><span class="nm-leg-div-dot" style="background:var(--steel-2);"></span>Proposed</span>
-          <span><span class="nm-leg-div-dot" style="background:#94A3B8;"></span>Struck Out / Withdrawn</span>
-          <span><span class="stn-badge depot" style="width:16px; height:16px; border-width:1.5px;"></span>Satellite Depot (sanctioned)</span>
+        <div class="nm-toolbar">
+          <div class="nm-chipgroup" id="infraMapDivChips"></div>
+          <select class="nm-select" id="infraMapTypeFilter"></select>
+          <input class="nm-searchbox" id="infraMapSearchBox" placeholder="Search station or section&hellip;">
         </div>
-        <div class="infra-map-frame"><div id="infraMap"></div></div>
+        <div class="infra-map-frame">
+          <div id="infraMap"></div>
+          <div class="nm-mapfloat" id="infraMapLegendBox"></div>
+        </div>
+        <div class="nm-jumplabel">Jump to a division</div>
+        <div class="nm-divjump" id="infraMapDivJump"></div>
+        <div class="nm-jumplabel">Jump closer &mdash; by Sr.&nbsp;DEN jurisdiction</div>
+        <div class="nm-divjump" id="infraMapSrdenJump"></div>
       </div>
+    </div>
+
+    <div class="card" id="infraMapUnplacedCard" style="display:none;">
+      <h3>Not mapped yet</h3>
+      <div class="cap">Every station below has a TM siding / rest-house entry but could not be placed on the map yet (no surveyed or approximate position on record) &mdash; keep correcting the data and these will move onto the map above.</div>
+      <div id="infraMapUnplacedList"></div>
     </div>
 
     <div class="card">
@@ -6469,25 +6490,290 @@ function openInfraSourceDrawer(){
 function infraMapAvailable(){ return !!(DATA.infraMap && (DATA.infraMap.mapStations||[]).length); }
 
 function infraMapStationStatus(r){
-  if (r.struck) return {label:'Struck Out / Withdrawn', color:'#94A3B8'};
-  if (r.sidingAvailTM || r.sidingAvailRGM || r.rhAvail) return {label:'Available', color: cssVar('--good')};
-  if (r.sidingSancTM || r.sidingSancRGM || r.rhSanc) return {label:'Sanctioned', color: cssVar('--warn')};
-  if (r.sidingPropTM || r.sidingPropRGM || r.rhProp) return {label:'Proposed', color: cssVar('--steel-2')};
-  return {label:'Status unclear', color:'#94A3B8'};
+  if (r.struck) return {code:'struck', label:'Struck Out / Withdrawn', color:'#94A3B8'};
+  if (r.sidingAvailTM || r.sidingAvailRGM || r.rhAvail) return {code:'available', label:'Available', color: cssVar('--good')};
+  if (r.sidingSancTM || r.sidingSancRGM || r.rhSanc) return {code:'sanctioned', label:'Sanctioned', color: cssVar('--warn')};
+  if (r.sidingPropTM || r.sidingPropRGM || r.rhProp) return {code:'proposed', label:'Proposed', color: cssVar('--steel-2')};
+  return {code:'unclear', label:'Status unclear', color:'#94A3B8'};
+}
+// Added 26-Nov-2026 per Shruti's feature-parity request: a station marker
+// now needs to say THREE things at once (division, feature, status) --
+// this picks which of the 3 "feature" symbols a station gets (colour =
+// division and ring = status are applied separately in infraMapIconHtml()).
+function infraMapCategory(r){
+  const hasSiding = r.sidingAvailTM || r.sidingSancTM || r.sidingPropTM || r.sidingAvailRGM || r.sidingSancRGM || r.sidingPropRGM;
+  const hasRH = r.rhAvail || r.rhSanc || r.rhProp;
+  if (hasSiding && hasRH) return 'both';
+  if (hasRH) return 'resthouse';
+  return 'siding';
+}
+
+// Deliberately separate SVG constants from the Overview map's own
+// TAMPING_GLYPH/NONTAMPING_GLYPH/DEPOT_GLYPH (those live in the OTHER
+// <script> block further down the page, in window.NM's own IIFE scope --
+// this module stays self-contained rather than reaching across script
+// tags for a coincidental lexical-scope convenience).
+const IM_SIDING_GLYPH = '<path d="M2 5.3h12M2 10.7h12" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<path d="M4.1 3.6v3.2M7 3.6v3.2M9.9 3.6v3.2M4.1 9.2v3.2M7 9.2v3.2M9.9 9.2v3.2" stroke-width="1"/>';
+const IM_RH_GLYPH = '<path d="M3 7.5L8 3.3l5 4.2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+  '<path d="M4.4 6.7v5.7h7.2V6.7" stroke-width="1.5" stroke-linejoin="round" fill="none"/>';
+const IM_BOTH_GLYPH = '<path d="M3.2 5.1L8 2.1l4.8 3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+  '<path d="M4.3 4.6v3.4h7.4V4.6" stroke-width="1.2" stroke-linejoin="round" fill="none"/>' +
+  '<path d="M2 12.8h12" stroke-width="1.5" stroke-linecap="round"/><path d="M4.2 11.2v2.3M8 11.2v2.3M11.8 11.2v2.3" stroke-width="1"/>';
+const IM_DEPOT_GLYPH = '<circle cx="5.3" cy="5.3" r="2.4" fill="none" stroke-width="1.5"/>' +
+  '<path d="M7 7l5.3 5.3" stroke-width="1.8" stroke-linecap="round"/><path d="M3.6 5.3l1.7-1.7" stroke-width="1.3" stroke-linecap="round"/>';
+function imGlyphSvg(cat){
+  const g = cat==='resthouse' ? IM_RH_GLYPH : cat==='both' ? IM_BOTH_GLYPH : cat==='depot' ? IM_DEPOT_GLYPH : IM_SIDING_GLYPH;
+  return `<svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">${g}</svg>`;
+}
+function infraMapIconHtml(cat, status, div){
+  const color = (DATA.infraMap && DATA.infraMap.divColor && DATA.infraMap.divColor[div]) || '#334155';
+  const shapeCls = cat==='depot' ? ' im-depot' : '';
+  const struckCls = status.code==='struck' ? ' struck' : '';
+  return `<div class="stn-badge${shapeCls}${struckCls}" style="background:${color}; box-shadow:0 2px 6px rgba(15,23,42,.35), 0 0 0 3px ${status.color} inset;">${imGlyphSvg(cat)}</div>`;
 }
 
 let infraMapInited = false, infraMapInstance = null;
+let infraMapMarkerLayer, infraMapPolyLayers = {}, infraMapAllMarkers = [];
+const infraMapActiveDivs = new Set(['UBL','SBC','MYS']);
+let infraMapActiveFilter = 'all';
+
+function infraMapMatchesFilter(s){
+  if (infraMapActiveFilter === 'all') return true;
+  if (infraMapActiveFilter.indexOf('feat:') === 0) return s.cat === infraMapActiveFilter.slice(5);
+  if (infraMapActiveFilter.indexOf('status:') === 0) return s.status.code === infraMapActiveFilter.slice(7);
+  return true;
+}
+
+function buildInfraMapMarkers(){
+  infraMapMarkerLayer.clearLayers();
+  infraMapAllMarkers = [];
+  const im = DATA.infraMap;
+  (im.mapStations||[]).forEach(r=>{
+    if (r.lat==null || r.lon==null) return;
+    const cat = infraMapCategory(r);
+    const status = infraMapStationStatus(r);
+    const marker = L.marker([r.lat, r.lon], {
+      icon: L.divIcon({html: infraMapIconHtml(cat, status, r.division), className:'', iconSize:[24,24], iconAnchor:[12,12]})
+    });
+    marker.bindTooltip(
+      `<b>${esc(r.station)}</b> — ${esc(status.label)}<span class="tip-src">${esc(DIV_LABEL[r.division]||r.division)} &bull; ${esc(r.srdenRaw||'')}</span>`,
+      {className:'swr-tip', direction:'top', offset:[0,-14]}
+    );
+    marker.on('click', ()=> openInfraMapStationDrawer(r));
+    marker._im = {div:r.division, cat, status, code:r.station||'', section:r.section||'', srden:r.srdenRaw||''};
+    infraMapAllMarkers.push(marker);
+  });
+  (im.depots||[]).forEach(d=>{
+    if (d.lat==null || d.lon==null) return;
+    const status = {code:'sanctioned', label:'Sanctioned', color: cssVar('--warn')};
+    const marker = L.marker([d.lat, d.lon], {
+      icon: L.divIcon({html: infraMapIconHtml('depot', status, d.division), className:'', iconSize:[24,24], iconAnchor:[12,12]}),
+      // High zIndexOffset: Leaflet otherwise stacks markers purely by
+      // latitude, so a depot marker can end up buried under overlapping
+      // station markers and become unclickable -- these 3 are high-value
+      // and should always be reachable on top.
+      zIndexOffset: 1000,
+    });
+    marker.bindTooltip(
+      `<b>${esc(d.station)}</b> — Satellite Depot (sanctioned)<span class="tip-src">${esc(DIV_LABEL[d.division]||d.division)}</span>`,
+      {className:'swr-tip', direction:'top', offset:[0,-14]}
+    );
+    marker.on('click', ()=> openInfraDepotDrawer(d));
+    marker._im = {div:d.division, cat:'depot', status, code:d.station||'', section:d.description||'', srden:d.jurisdictionRaw||''};
+    infraMapAllMarkers.push(marker);
+  });
+  applyInfraMapFilters();
+}
+
+function applyInfraMapFilters(){
+  Object.keys(infraMapPolyLayers).forEach(div=>{
+    if (infraMapActiveDivs.has(div)) { if (!infraMapInstance.hasLayer(infraMapPolyLayers[div])) infraMapPolyLayers[div].addTo(infraMapInstance); }
+    else { if (infraMapInstance.hasLayer(infraMapPolyLayers[div])) infraMapInstance.removeLayer(infraMapPolyLayers[div]); }
+  });
+  infraMapMarkerLayer.clearLayers();
+  infraMapAllMarkers.forEach(m=>{
+    const s = m._im;
+    if (infraMapActiveDivs.has(s.div) && infraMapMatchesFilter(s)) m.addTo(infraMapMarkerLayer);
+  });
+}
+
+function fitAllInfraMap(){
+  const b = infraMapAllMarkers.map(m=> m.getLatLng());
+  if (b.length) infraMapInstance.fitBounds(b, {padding:[28,28]});
+}
+
+function flyToInfraDiv(div){
+  const pts = [];
+  infraMapAllMarkers.forEach(m=>{ if (m._im.div===div) pts.push(m.getLatLng()); });
+  (((DATA.infraMap||{}).tracksByDiv||{})[div]||[]).forEach(seg=> seg.pts.forEach(p=>pts.push(p)));
+  if (pts.length) infraMapInstance.flyToBounds(pts, {padding:[36,36], duration:0.8});
+}
+
+function flyToInfraSrden(div, srdenRaw){
+  const pts = [];
+  ((DATA.infraMap||{}).mapStations||[]).forEach(r=>{
+    if (r.division===div && r.srdenRaw===srdenRaw && r.lat!=null) pts.push([r.lat, r.lon]);
+  });
+  if (pts.length) infraMapInstance.flyToBounds(pts, {padding:[24,24], duration:0.8, maxZoom:13});
+}
+
+function renderInfraMapChips(){
+  const divBox = document.getElementById('infraMapDivChips');
+  if (!divBox) return;
+  const divColor = (DATA.infraMap && DATA.infraMap.divColor) || {};
+  const divs = ['UBL','SBC','MYS'];
+  divBox.innerHTML = divs.map(d=>
+    `<div class="nm-chip${infraMapActiveDivs.has(d)?' active':''}" data-div="${d}"><span class="dot" style="background:${divColor[d]||'#334155'}"></span>${esc(d)}</div>`
+  ).join('');
+  divBox.querySelectorAll('.nm-chip').forEach(ch=> ch.addEventListener('click', ()=>{
+    const d = ch.dataset.div;
+    if (infraMapActiveDivs.has(d)){ infraMapActiveDivs.delete(d); ch.classList.remove('active'); }
+    else { infraMapActiveDivs.add(d); ch.classList.add('active'); }
+    applyInfraMapFilters();
+  }));
+
+  const jumpBox = document.getElementById('infraMapDivJump');
+  if (jumpBox){
+    jumpBox.innerHTML = divs.map(d=>
+      `<button class="nm-divbtn" data-flydiv="${d}"><span class="dot" style="background:${divColor[d]||'#334155'}"></span>Jump to ${esc(DIV_LABEL[d]||d)}</button>`
+    ).join('') + `<button class="nm-divbtn" data-fitall="1"><span class="dot" style="background:#334155"></span>Fit whole network</button>`;
+    jumpBox.querySelectorAll('[data-flydiv]').forEach(b=> b.addEventListener('click', ()=> flyToInfraDiv(b.dataset.flydiv)));
+    jumpBox.querySelectorAll('[data-fitall]').forEach(b=> b.addEventListener('click', fitAllInfraMap));
+  }
+}
+
+function renderInfraMapTypeFilter(){
+  const sel = document.getElementById('infraMapTypeFilter');
+  if (!sel) return;
+  const im = DATA.infraMap || {};
+  const items = (im.mapStations||[]).map(r=> ({cat:infraMapCategory(r), status:infraMapStationStatus(r)}))
+    .concat((im.depots||[]).map(()=> ({cat:'depot', status:{code:'sanctioned'}})));
+  const count = pred => items.filter(pred).length;
+  let html = `<option value="all">All features (${items.length})</option>`;
+  html += '<optgroup label="By feature">';
+  html += `<option value="feat:siding">TM / RGM Siding only (${count(i=>i.cat==='siding')})</option>`;
+  html += `<option value="feat:resthouse">Rest House only (${count(i=>i.cat==='resthouse')})</option>`;
+  html += `<option value="feat:both">Siding &amp; Rest House (${count(i=>i.cat==='both')})</option>`;
+  html += `<option value="feat:depot">Satellite Depot (${count(i=>i.cat==='depot')})</option>`;
+  html += '</optgroup><optgroup label="By status">';
+  html += `<option value="status:available">Available (${count(i=>i.status.code==='available')})</option>`;
+  html += `<option value="status:sanctioned">Sanctioned (${count(i=>i.status.code==='sanctioned')})</option>`;
+  html += `<option value="status:proposed">Proposed (${count(i=>i.status.code==='proposed')})</option>`;
+  html += `<option value="status:struck">Struck Out / Withdrawn (${count(i=>i.status.code==='struck')})</option>`;
+  html += '</optgroup>';
+  sel.innerHTML = html;
+  sel.value = infraMapActiveFilter;
+  sel.addEventListener('change', ()=>{ infraMapActiveFilter = sel.value; applyInfraMapFilters(); });
+}
+
+function renderInfraMapSrdenJump(){
+  const box = document.getElementById('infraMapSrdenJump');
+  if (!box) return;
+  const im = DATA.infraMap || {};
+  const groups = {};
+  (im.mapStations||[]).forEach(r=>{
+    if (!r.division || !r.srdenRaw) return;
+    const key = r.division+'|'+r.srdenRaw;
+    (groups[key] || (groups[key] = {div:r.division, srden:r.srdenRaw, count:0})).count++;
+  });
+  const keys = Object.keys(groups).sort();
+  if (!keys.length){ box.innerHTML = '<span class="hint">No Sr.DEN jurisdiction data on the map yet.</span>'; return; }
+  const divColor = im.divColor || {};
+  box.innerHTML = keys.map(k=>{
+    const g = groups[k];
+    return `<button class="nm-divbtn nm-srdenbtn" data-div="${esc(g.div)}" data-srden="${esc(g.srden)}"><span class="dot" style="background:${divColor[g.div]||'#334155'}"></span>${esc(g.div)} ${esc(g.srden)} (${g.count})</button>`;
+  }).join('');
+  box.querySelectorAll('[data-srden]').forEach(b=> b.addEventListener('click', ()=> flyToInfraSrden(b.dataset.div, b.dataset.srden)));
+}
+
+function renderInfraMapLegend(){
+  const box = document.getElementById('infraMapLegendBox');
+  if (!box) return;
+  const divColor = (DATA.infraMap && DATA.infraMap.divColor) || {};
+  let html = '<h4>Colour = Division</h4>';
+  ['UBL','SBC','MYS'].forEach(d=>{
+    html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${divColor[d]||'#334155'}"></span><span class="nm-leg-label">${esc(DIV_LABEL[d]||d)}</span></div>`;
+  });
+  html += '<h4 style="margin-top:10px;">Symbol = Feature</h4>';
+  html += `<div class="nm-leg-row"><span class="nm-leg-badge" style="background:#334155;">${imGlyphSvg('siding')}</span><span class="nm-leg-label">TM / RGM Siding only</span></div>`;
+  html += `<div class="nm-leg-row"><span class="nm-leg-badge" style="background:#334155;">${imGlyphSvg('resthouse')}</span><span class="nm-leg-label">Rest House only</span></div>`;
+  html += `<div class="nm-leg-row"><span class="nm-leg-badge" style="background:#334155;">${imGlyphSvg('both')}</span><span class="nm-leg-label">Siding &amp; Rest House</span></div>`;
+  html += `<div class="nm-leg-row"><span class="nm-leg-badge square" style="background:#334155;">${imGlyphSvg('depot')}</span><span class="nm-leg-label">Satellite Depot (sanctioned)</span></div>`;
+  html += '<h4 style="margin-top:10px;">Ring colour = Status</h4>';
+  html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--good')};"></span><span class="nm-leg-label">Available</span></div>`;
+  html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--warn')};"></span><span class="nm-leg-label">Sanctioned</span></div>`;
+  html += `<div class="nm-leg-row"><span class="nm-leg-div-dot" style="background:${cssVar('--steel-2')};"></span><span class="nm-leg-label">Proposed</span></div>`;
+  html += `<div class="nm-leg-row"><span class="stn-badge struck" style="position:static; width:16px; height:16px; background:#334155;"></span><span class="nm-leg-label">Struck Out / Withdrawn (dashed ring)</span></div>`;
+  box.innerHTML = html;
+}
+
+function wireInfraMapSearch(){
+  const box = document.getElementById('infraMapSearchBox');
+  if (!box) return;
+  box.addEventListener('input', e=>{
+    const q = e.target.value.trim().toUpperCase();
+    if (!q){ applyInfraMapFilters(); return; }
+    infraMapMarkerLayer.clearLayers();
+    infraMapAllMarkers.forEach(m=>{
+      const s = m._im;
+      const hay = (s.code+' '+s.section+' '+s.srden).toUpperCase();
+      if (hay.includes(q)) m.addTo(infraMapMarkerLayer);
+    });
+  });
+}
+
+// Shows, below the map, every station that has a siding/rest-house entry
+// but couldn't be placed (no surveyed/approximate RDPS position yet) --
+// per Shruti: "if something not mapped, show at the bottom as in overview
+// page, i will keep on correcting the data."
+function renderInfraMapUnplaced(){
+  const card = document.getElementById('infraMapUnplacedCard');
+  if (!card) return;
+  const unmapped = ((DATA.infraMap||{}).unmappedStations) || [];
+  if (!unmapped.length){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const catLabel = {siding:'TM / RGM Siding', resthouse:'Rest House', both:'Siding &amp; Rest House'};
+  document.getElementById('infraMapUnplacedList').innerHTML = unmapped.map(r=>{
+    const cat = infraMapCategory(r);
+    const status = infraMapStationStatus(r);
+    return `
+    <div class="nm-unplaced-row">
+      <div><b>${esc(r.station)}</b> &mdash; ${esc(DIV_LABEL[r.division]||r.division)} &bull; ${esc(r.srdenRaw||'—')}${r.section?(' &bull; '+esc(r.section)):''}
+        <div style="color:var(--muted); font-size:11px; margin-top:2px;">${catLabel[cat]||'—'} &bull; ${esc(status.label)}</div></div>
+      <div class="reason">No surveyed or approximate position on record yet</div>
+    </div>`;
+  }).join('');
+}
+
 function renderInfraMap(){
   const wrap = document.getElementById('infraMapWrap');
   if (!wrap) return;
-  if (!infraMapAvailable()){ wrap.style.display = 'none'; return; }
+  if (!infraMapAvailable()){
+    wrap.style.display = 'none';
+    const uc = document.getElementById('infraMapUnplacedCard');
+    if (uc) uc.style.display = 'none';
+    return;
+  }
   wrap.style.display = '';
   const im = DATA.infraMap;
   const capEl = document.getElementById('infraMapCap');
   if (capEl) capEl.textContent = `${im.mapStations.length} station(s) placed on the map`
-    + (im.unmappedStations.length? ` &bull; ${im.unmappedStations.length} station(s) with a siding/rest-house entry could not be placed yet (no surveyed or approximate position on record)`:'')
+    + (im.unmappedStations.length? ` &bull; ${im.unmappedStations.length} station(s) not mapped yet (see below)`:'')
     + ` &bull; ${im.depots.length} satellite depot proposal(s) &bull; as of ${esc(im.asOf||'—')}`;
-  if (infraMapInited){ if (infraMapInstance) setTimeout(()=>infraMapInstance.invalidateSize(), 50); return; }
+
+  renderInfraMapChips();
+  renderInfraMapTypeFilter();
+  renderInfraMapSrdenJump();
+  renderInfraMapLegend();
+  renderInfraMapUnplaced();
+  wireInfraMapSearch();
+
+  if (infraMapInited){
+    buildInfraMapMarkers();
+    if (infraMapInstance) setTimeout(()=>infraMapInstance.invalidateSize(), 50);
+    return;
+  }
   const el = document.getElementById('infraMap');
   if (!el || typeof L === 'undefined') return;
   infraMapInited = true;
@@ -6495,29 +6781,19 @@ function renderInfraMap(){
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 17, attribution: 'Esri, HERE, Garmin &copy; OpenStreetMap contributors'
   }).addTo(infraMapInstance);
-  const bounds = [];
-  im.mapStations.forEach(r=>{
-    if (r.lat==null || r.lon==null) return;
-    const st = infraMapStationStatus(r);
-    const icon = L.divIcon({html:`<div class="stn-badge" style="background:${st.color};"></div>`, className:'', iconSize:[22,22], iconAnchor:[11,11]});
-    const marker = L.marker([r.lat, r.lon], {icon}).addTo(infraMapInstance);
-    marker.bindTooltip(`${esc(r.station)} — ${esc(st.label)}`);
-    marker.on('click', ()=> openInfraMapStationDrawer(r));
-    bounds.push([r.lat, r.lon]);
+
+  Object.keys(im.tracksByDiv||{}).forEach(div=>{
+    const grp = L.layerGroup();
+    (im.tracksByDiv[div]||[]).forEach(seg=>{
+      if (seg.pts.length < 2) return;
+      L.polyline(seg.pts, {color: (im.divColor&&im.divColor[div])||'#334155', weight: 3, opacity: .55}).addTo(grp);
+    });
+    infraMapPolyLayers[div] = grp.addTo(infraMapInstance);
   });
-  (im.depots||[]).forEach(d=>{
-    if (d.lat==null || d.lon==null) return;
-    const icon = L.divIcon({html:`<div class="stn-badge depot"></div>`, className:'', iconSize:[22,22], iconAnchor:[11,11]});
-    // High zIndexOffset: Leaflet otherwise stacks markers purely by latitude,
-    // so a depot marker can end up buried under overlapping station markers
-    // and become unclickable -- these 3 are high-value and should always be
-    // reachable on top.
-    const marker = L.marker([d.lat, d.lon], {icon, zIndexOffset: 1000}).addTo(infraMapInstance);
-    marker.bindTooltip(`${esc(d.station)} — Satellite Depot (sanctioned)`);
-    marker.on('click', ()=> openInfraDepotDrawer(d));
-    bounds.push([d.lat, d.lon]);
-  });
-  if (bounds.length) infraMapInstance.fitBounds(bounds, {padding:[28,28]});
+
+  infraMapMarkerLayer = L.layerGroup().addTo(infraMapInstance);
+  buildInfraMapMarkers();
+  fitAllInfraMap();
   setTimeout(()=>{ if (infraMapInstance) infraMapInstance.invalidateSize(); }, 80);
 }
 
