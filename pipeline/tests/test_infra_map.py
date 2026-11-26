@@ -286,6 +286,22 @@ class TestBuildInfraMap(unittest.TestCase):
         self.assertEqual(depot['station'], 'DWR')
         self.assertEqual(depot['lat'], 15.40)
 
+    def test_tracks_by_div_reuses_network_map_builder(self):
+        # Added 26-Nov-2026 per Shruti's feature-parity request: the Infra
+        # map must show the same route polylines as the Overview tab's
+        # Network Map, built from the exact same live rdps_by_div input
+        # this module already receives -- no second network round trip.
+        from sources import network_map
+        expected = network_map.build_tracks_from_rdps(synthetic_rdps_by_div())
+        self.assertEqual(self.result['tracksByDiv'], expected)
+        self.assertIn('UBL', self.result['tracksByDiv'])
+        self.assertIn('SBC', self.result['tracksByDiv'])
+
+    def test_div_color_surfaced_for_frontend_reuse(self):
+        from sources import network_map
+        self.assertEqual(self.result['divColor'], network_map.DIV_COLOR)
+        self.assertEqual(self.result['divColor']['UBL'], '#0284C7')
+
 
 if __name__ == '__main__':
     unittest.main()
