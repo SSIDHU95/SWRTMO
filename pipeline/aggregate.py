@@ -9,7 +9,7 @@ build_base_payload()/run() used -- ported verbatim wherever it has no
 filesystem dependency -- and writes the same dashboard_payload.json shape
 dashboard_template2.html already expects.
 
-Two sources genuinely have NO live-sync equivalent and are gracefully
+One source genuinely has NO live-sync equivalent and is gracefully
 degraded here, exactly matching run_pipeline.py's own WARN-and-degrade
 pattern for a missing optional local file:
 
@@ -23,14 +23,20 @@ pattern for a missing optional local file:
     same as run_pipeline.py would if its local Daily Progress folder were
     empty.
 
-  - IOH/POH current-year letter + CPOH/RYP forward-planning letter
-    (run_pipeline.py's extract_ioh_poh_letter / extract_cpoh_ryp_planning).
-    Both read a Word (.docx) letter with no Supabase table behind it.
-    ioh_poh_letter=None, cpoh_planning=None here; Fleet Health's
-    currentYear/cpohPlanning sections degrade to empty, same as
-    run_pipeline.py's own "WARN: no .docx files found" path. (The
-    FORECAST part of Fleet Health -- FY2027-28..2029-30 -- is NOT
-    affected; that comes from ioh_poh_planning, which IS live-synced.)
+  Fleet Health's currentYear section (previously degraded the same way --
+  it used to read a Dy.CE/TM office letter with no Supabase table behind
+  it) was fixed 26-Nov-2026: it now reads payload.currentYearProgress
+  from ioh_poh_planning, a live-synced sheet that was already being
+  pulled for the FY27-30 forecast and just hadn't been read for this
+  purpose yet (see extract_current_year_progress() in sources/
+  ioh_poh_planning.py). cpohPlanning (the CPOH/RYP forward POH-planning
+  letter) was fixed the same day too, but differently: that one really is
+  a signed PDF letter issued about once a year with no sheet behind it at
+  all, so extract_cpoh_ryp_planning() now reads a hand-transcribed static
+  copy of Shruti's actual signed letter from pipeline/data/
+  cpoh_ryp_planning.json instead of degrading to None -- see that
+  function's own comment for how it gets updated the next time she
+  shares a new one.
 
 Of the other 6 live tables with no consumption anywhere in
 run_pipeline.py's run() (cumulative_failure, daily_positions, hq_summary,
@@ -413,6 +419,11 @@ def extract_ioh_poh_duration_norms(base=None):
     return ioh_poh_planning.extract_ioh_poh_duration_norms(payload)
 
 
+def extract_current_year_progress(base, as_of):
+    payload = _cached_payload(ioh_poh_planning)
+    return ioh_poh_planning.extract_current_year_progress(payload, as_of=as_of)
+
+
 def extract_ioh_poh_letter(base, as_of):
     """No live table backs the current-year IOH/POH Dy.CE/TM office letter
     (a Word .docx with no Supabase equivalent) - degrades to None, same as
@@ -425,13 +436,33 @@ def extract_ioh_poh_letter(base, as_of):
     return None
 
 
+_CPOH_RYP_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'cpoh_ryp_planning.json')
+
+
 def extract_cpoh_ryp_planning(base=None):
-    """No live table backs the CPOH/RYP forward POH-planning letter
-    (also a Word .docx) - degrades to None, same reasoning as
-    extract_ioh_poh_letter above."""
-    log("WARN: no live source for the CPOH/RYP forward-planning letter "
-        "(Word .docx, no Supabase table) - cpoh_planning will be None.")
-    return None
+    """Fixed 26-Nov-2026 per Shruti ("As now I have provided the all data
+    for CPOH also, remaining columns can be filled and linked"): a signed
+    letter like this one is never going to have a live Google Sheet/
+    Supabase sync (it's a PDF, issued roughly once a year, not a sheet
+    Apps Script can watch) -- so instead of the permanent None this used
+    to return, read the hand-transcribed copy of her actual signed letter
+    at pipeline/data/cpoh_ryp_planning.json. See that file's own
+    "_comment" key for exactly how to update it the next time she shares
+    a new signed letter (replace the whole file, same shape -- no code
+    change needed here)."""
+    try:
+        with open(_CPOH_RYP_DATA_FILE, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        log(f"WARN: could not read {_CPOH_RYP_DATA_FILE} ({e}) - cpoh_planning will be None.")
+        return None
+    return dict(
+        letterDate=data.get('letterDate'),
+        proposed2728=data.get('proposed2728') or [],
+        tentative2829=data.get('tentative2829') or [],
+        tentative2930=data.get('tentative2930') or [],
+        tampingDemand=data.get('tampingDemand') or [],
+    )
 
 
 def extract_double_shift(base=None):
@@ -747,8 +778,8 @@ def run(outdir, as_of=None):
     exception_data = extract_exceptions(base)
     ioh_poh_records = extract_ioh_poh(base)
     ioh_poh_norms = extract_ioh_poh_duration_norms(base)
-    ioh_poh_letter = extract_ioh_poh_letter(base, as_of)
     cpoh_planning = extract_cpoh_ryp_planning(base)
+    current_year_progress = extract_current_year_progress(base, as_of)
     ds_records = extract_double_shift(base)
     action_plan_53 = extract_action_plan_53(base)
     infra = extract_sidings_rest_houses(base)
@@ -1656,27 +1687,40 @@ def run(outdir, as_of=None):
     def attach_srden(machine_name):
         return lookup_srden(machine_name)
 
+    # Fixed 26-Nov-2026 per Shruti's Fleet Health rebuild request: this used
+    # to come from ioh_poh_letter (a Word office letter with no live sync,
+    # always None -- see that function's own comment), so currentYear was
+    # always empty. Replaced with current_year_progress (the "Progress
+    # 2026-2027" sheet, live-synced, parsed in ioh_poh_planning.py's
+    # extract_current_year_progress() -- see its own comment for the
+    # Completed/Ongoing/Overdue/Upcoming classification rules). `division`
+    # on each row is already the sheet's own PARENT division (what Shruti
+    # explicitly asked this schedule be grouped by -- not wherever the
+    # machine happens to be working right now); home_div is only a
+    # fallback for the rare row where that column was blank.
     current_events = []
-    if ioh_poh_letter:
-        for ev in ioh_poh_letter['events']:
-            ev = dict(ev)
-            ev['srden'] = attach_srden(ev['machine'])
-            ev['division'] = ev.get('division') or (home_div.get(norm(ev['machine'])))
-            current_events.append(ev)
-    current_priority = []
-    if ioh_poh_letter:
-        for ev in ioh_poh_letter['priorityEvents']:
-            ev = dict(ev)
-            ev['srden'] = attach_srden(ev['machine'])
-            ev['division'] = ev.get('division') or (home_div.get(norm(ev['machine'])))
-            current_priority.append(ev)
-    current_events.extend(current_priority)
-
-    ioh_priority = sorted(
-        (dict(e) for e in current_events
-         if e.get('type') == 'IOH' and e.get('status') in ('Yet to Release from Division', 'Ongoing / Under Attention')),
-        key=lambda e: (e['monthSort'], e['machine'])
-    )
+    for r in current_year_progress:
+        div = r['Division'] or home_div.get(norm(r['Machine']))
+        my = tuple(int(x) for x in r['MonthOfPlanning'].split('-')) if r['MonthOfPlanning'] else None
+        overdue_months = None
+        if r['Status'] == 'Overdue for Release' and my:
+            overdue_months = (as_of.year - my[0]) * 12 + (as_of.month - my[1])
+        current_events.append(dict(
+            machine=r['Machine'], type=r['Kind'], status=r['Status'],
+            division=div, srden=attach_srden(r['Machine']),
+            location=r['PlannedAt'], month=r['MonthOfPlanningLabel'],
+            monthSort=list(my) if my else [9999, 99],
+            overdueMonths=overdue_months,
+            arrivalDate=r['DateOfArrival'], completionDate=r['DateOfCompletion'],
+            tentative=r['Tentative'], totalDays=r['TotalDays'],
+            stipulatedDays=r['StipulatedDays'], term=r['Term'], remarks=r['Remarks'],
+        ))
+    unclassified_count = sum(1 for e in current_events if e['status'] is None)
+    if unclassified_count:
+        log(f"WARN: {unclassified_count} current-FY IOH/POH row(s) had neither a real "
+            f"arrival/completion date nor a parseable planning month - left with status=None "
+            f"(shown as 'Scheduled' by the dashboard's own fallback), check the Progress "
+            f"2026-2027 sheet for that row.")
 
     FUTURE_FY_LABELS = ['2027-2028', '2028-2029', '2029-2030']
     future_events = []
@@ -1685,19 +1729,55 @@ def run(outdir, as_of=None):
         mt = re.match(r'[A-Za-z]+', r['Machine'].replace(' ', '').replace('-', ''))
         typecode = ph.disp_type(mt.group(0).upper()) if mt else 'OTHER'
         for fy in FUTURE_FY_LABELS:
-            ioh_v, poh_v = (sched.get(fy) or [None, None])
-            for kind, val in (('IOH', ioh_v), ('POH', poh_v)):
-                if val in (None, '', '-'):
-                    continue
-                fy_a, fy_b = fy.split('-')
-                future_events.append(dict(
-                    machine=r['Machine'], machineKey=ph.machine_key(r['Machine']),
-                    division=r.get('Division'), type=typecode, kind=kind,
-                    fy=f"{fy_a}-{fy_b[-2:]}",
-                    fyRaw=fy, month=str(val), monthSort=list(parse_iohpoh_month_sort(str(val))),
-                    srden=attach_srden(r['Machine']),
-                ))
-    future_events.sort(key=lambda e: (e['fyRaw'], e['monthSort']))
+            ioh_v, _poh_v_excel = (sched.get(fy) or [None, None])
+            # Fixed 26-Nov-2026 per Shruti ("This signed letter supersedes
+            # the Excel data of the second sub-sheet of IOH/POH planning
+            # related to POH... for IOH, you can use that Excel sheet data
+            # that is correct"): POH future-year events now come from the
+            # signed CPOH/RYP letter (cpoh_planning) below instead of this
+            # sheet's own year-columns -- a machine the Excel sheet still
+            # shows due for POH in some FY but the letter does NOT carry
+            # is deliberately excluded (per Shruti: that means it's being
+            # handled separately, e.g. an end-of-life rehab/upgrade, not a
+            # standard POH). IOH is untouched -- she confirmed the Excel
+            # sheet's own IOH schedule is the correct one.
+            if ioh_v in (None, '', '-'):
+                continue
+            fy_a, fy_b = fy.split('-')
+            future_events.append(dict(
+                machine=r['Machine'], machineKey=ph.machine_key(r['Machine']),
+                division=r.get('Division'), type=typecode, kind='IOH',
+                fy=f"{fy_a}-{fy_b[-2:]}",
+                fyRaw=fy, month=str(ioh_v), monthSort=list(parse_iohpoh_month_sort(str(ioh_v))),
+                srden=attach_srden(r['Machine']),
+            ))
+
+    # POH future years: letter-sourced, per the comment above -- proposed2728
+    # is the firm FY2027-28 programme, tentative2829/tentative2930 are the
+    # lighter-detail provisional lists (no probable month given for those
+    # two in the letter itself, so month/monthSort stay unset for them;
+    # they still group correctly under their own FY).
+    _CPOH_FY_SOURCES = (
+        ('2027-2028', (cpoh_planning or {}).get('proposed2728') or [], 'probableSparingMonth'),
+        ('2028-2029', (cpoh_planning or {}).get('tentative2829') or [], None),
+        ('2029-2030', (cpoh_planning or {}).get('tentative2930') or [], None),
+    )
+    for fy, rows, month_field in _CPOH_FY_SOURCES:
+        fy_a, fy_b = fy.split('-')
+        for r in rows:
+            machine = r['machine']
+            mt = re.match(r'[A-Za-z]+', machine.replace(' ', '').replace('-', ''))
+            typecode = ph.disp_type(mt.group(0).upper()) if mt else ph.disp_type(str(r.get('type') or '').upper()) or 'OTHER'
+            month_val = r.get(month_field) if month_field else None
+            future_events.append(dict(
+                machine=machine, machineKey=ph.machine_key(machine),
+                division=home_div.get(norm(machine)), type=typecode, kind='POH',
+                fy=f"{fy_a}-{fy_b[-2:]}",
+                fyRaw=fy, month=month_val,
+                monthSort=list(parse_iohpoh_month_sort(month_val)) if month_val else [9999, 99],
+                srden=attach_srden(machine),
+            ))
+    future_events.sort(key=lambda e: (e['fyRaw'], e['monthSort'], e['machine']))
 
     def status_counts(events, status_field='status'):
         return dict(Counter(e.get(status_field) or 'Scheduled' for e in events))
@@ -1751,15 +1831,19 @@ def run(outdir, as_of=None):
         log(f"WARN: completed IOH ({completed_ioh_count}) + completed POH ({completed_poh_count}) "
             f"!= completedCount ({completed_total}) - a current-year event has an unexpected type/status combo")
 
+    # Indian financial year (Apr-Mar) label for `as_of`, e.g. "2026-27" --
+    # used to replace the hardcoded "26-27" the old office-letter-sourced
+    # fy string carried, so this stays correct on its own every April.
+    _fy_start = as_of.year if as_of.month >= 4 else as_of.year - 1
+    current_fy_label = f"{_fy_start}-{str(_fy_start + 1)[-2:]}"
+
     p['fleet']['iohPohSchedule'] = dict(
         currentYear=dict(
-            source=(ioh_poh_letter or {}).get('sourceFile'),
-            letterDate=(ioh_poh_letter or {}).get('letterDate'),
-            fy=(ioh_poh_letter or {}).get('fy'),
+            source="live sync (ioh_poh_planning — Progress 2026-2027 sheet)",
+            letterDate=None,
+            fy=current_fy_label,
             events=current_events,
             unmappedDivisionEvents=unknown_div_events,
-            priorityEvents=current_priority,
-            iohPriorityEvents=ioh_priority,
             byDivision=current_div_summary,
             bySrden=current_srden_summary,
             statusCounts=status_overall,
@@ -1768,8 +1852,8 @@ def run(outdir, as_of=None):
             completedCount=completed_total,
             completedIOHCount=completed_ioh_count,
             completedPOHCount=completed_poh_count,
-            yetToReleaseCount=status_overall.get('Yet to Release from Division', 0),
-            scheduledCount=status_overall.get('Scheduled', 0),
+            overdueCount=status_overall.get('Overdue for Release', 0),
+            upcomingCount=status_overall.get('Upcoming', 0),
             totalCount=len(current_events),
         ),
         futureYears=dict(
@@ -1792,10 +1876,11 @@ def run(outdir, as_of=None):
         p['fleet']['cpohPlanning'] = None
 
     log(f"Fleet Health IOH/POH schedule: {len(current_events)} current-year events "
-        f"({ioh_poh_letter and ioh_poh_letter.get('sourceFile')}), {len(future_events)} "
-        f"future-year events (27-30 workbook); completed {completed_total} "
-        f"(IOH {completed_ioh_count} + POH {completed_poh_count}); {len(ioh_priority)} "
-        f"IOH priority entries derived, {len(current_priority)} POH priority entries from the letter.")
+        f"(Progress {current_fy_label} sheet), {len(future_events)} future-year events "
+        f"(27-30 workbook IOH + CPOH/RYP letter POH); completed {completed_total} "
+        f"(IOH {completed_ioh_count} + POH {completed_poh_count}); "
+        f"{status_overall.get('Overdue for Release', 0)} overdue for release, "
+        f"{status_overall.get('Upcoming', 0)} upcoming.")
 
     out_path = os.path.join(outdir, 'dashboard_payload.json')
     with open(out_path, 'w') as f:
