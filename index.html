@@ -5300,6 +5300,29 @@ function openActionPlan53Drawer(sno){
     `<div class="ap-timeline">${entries.map(h=>`<div class="ap-timeline-entry"><div class="apt-date">Progress up to ${esc(h.date)}</div><div class="apt-text">${esc(h.text)}</div></div>`).join('')}</div>`);
   openDrawer(`#${pt.sno} — ${pt.actionPoint}`, `${esc(apTitleCase(pt.category))} &bull; Action Point ${pt.sno} of ${ap.totalPoints}`, html);
 }
+// Category drawer (added 26-Nov-2026 per Shruti: "can this be clickable and
+// make this drawer method. Like other tabs. Further clicking gives further
+// data on that point.") -- same two-level drill-down already used by every
+// other category chart in this app (e.g. openExceptionsDrawer): the chart
+// bar opens a drawer listing that category's points (reusing apCardHtml,
+// the same card markup the main list below already uses), and clicking a
+// point there opens openActionPlan53Drawer() for its full history, exactly
+// like clicking it in the main list does.
+function openApCategoryDrawer(category){
+  const ap = DATA.actionPlan53;
+  if (!ap) return;
+  const rows = ap.points.filter(p=>p.category===category);
+  if (!rows.length) return;
+  const updatedCount = rows.filter(p=>p.updatedThisCycle).length;
+  const html = statRow([
+    {l:'Action points', v: rows.length},
+    {l:'Updated this cycle', v: `${updatedCount}/${rows.length}`},
+  ]) + `<div class="exc-list">${rows.map(apCardHtml).join('')}</div>`;
+  openDrawer(`${esc(apTitleCase(category))} — Action Points`, `${rows.length} action point(s) in this category &bull; click a card for its full history since April`, html);
+  Array.from(document.querySelectorAll('#drawerBody .ap-card')).forEach(card=>{
+    card.addEventListener('click', ()=>openActionPlan53Drawer(+card.dataset.sno));
+  });
+}
 function renderApList(){
   const ap = DATA.actionPlan53;
   const list = document.getElementById('apList');
@@ -5371,6 +5394,7 @@ function drawActionPlan53(){
     onBarClick:(i)=>{
       document.getElementById('apCatFilter').value = cats[i].name;
       renderApList();
+      openApCategoryDrawer(cats[i].name);
     }
   });
 
