@@ -109,16 +109,30 @@ def _strip_km_suffix(code):
     return m.group(1).strip() if m else str(code or '').strip()
 
 
+# Manual code aliases for a handful of stations whose 'SrDEN Detailed' label
+# doesn't match any RDPS/APPROX_STATIONS code directly -- confirmed by
+# Shruti herself rather than guessed (e.g. 27-Nov-2026: "E UBL is BMAP").
+# Add more here as she identifies them; this stays a short, explicit list
+# rather than a fuzzy-matching heuristic, so every entry is traceable to
+# something she actually said.
+_STATION_CODE_ALIASES = {
+    'E UBL': 'BMAP',
+}
+
+
 def _resolve_geo(code, stations_geo):
     """Exact match, then km-suffix-stripped, then no-space variant of
-    each. Returns the geo dict or None (an honest, undecorated gap --
-    never guessed). Mirrors the matching used to build this feature's
-    private preview (26-Nov-2026), extended with the km-suffix case
-    found directly in the live data."""
+    each, then a known manual alias. Returns the geo dict or None (an
+    honest, undecorated gap -- never guessed). Mirrors the matching used
+    to build this feature's private preview (26-Nov-2026), extended with
+    the km-suffix case found directly in the live data."""
     candidates = [code, code.replace(' ', '')]
     stripped = _strip_km_suffix(code)
     if stripped != code:
         candidates += [stripped, stripped.replace(' ', '')]
+    alias = _STATION_CODE_ALIASES.get(code) or _STATION_CODE_ALIASES.get(stripped)
+    if alias:
+        candidates += [alias, alias.replace(' ', '')]
     for c in candidates:
         if c in stations_geo:
             return stations_geo[c]
@@ -260,6 +274,25 @@ def _rh_work_stage(status_text):
     return 'Work In Progress' if s.strip() else 'Not Started / Unknown'
 
 
+def _feature_status(avail, sanc, prop):
+    """One of 'available'/'sanctioned'/'proposed'/None for a single
+    feature (siding, or rest house), given that feature's own
+    avail/sanctioned/proposed flags. Available beats Sanctioned beats
+    Proposed when more than one happens to be set for the same feature
+    (shouldn't normally happen, but a real sheet occasionally does mark
+    more than one stage) -- this is a priority WITHIN one feature, not a
+    blend ACROSS features the way the station-level status used to be
+    computed (see the 27-Nov-2026 fix below for why that distinction
+    matters)."""
+    if avail:
+        return 'available'
+    if sanc:
+        return 'sanctioned'
+    if prop:
+        return 'proposed'
+    return None
+
+
 def build_infra_map(payload, rdps_by_div, supplement):
     if not payload:
         return None
@@ -270,13 +303,42 @@ def build_infra_map(payload, rdps_by_div, supplement):
     strikeouts_by_div = {d: set(v) for d, v in (supplement.get('strikeouts') or {}).items()}
     for r in station_rows:
         r['struck'] = r['station'] in strikeouts_by_div.get(r['division'], ())
+        # Fixed 27-Nov-2026 per Shruti: "sanctioned doesn't mean it is
+        # available... the proposed ones mean they are not yet
+        # sanctioned also." A station's SIDING status and REST HOUSE
+        # status are now computed and exposed SEPARATELY, each from only
+        # its own flags (TM+RGM combined for siding; rhAvail/Sanc/Prop
+        # for rest house) -- never blended with each other the way the
+        # frontend's old single combined per-station status used to.
+        # struck is deliberately NOT read here any more: per Shruti's
+        # 27-Nov-2026 "for the time being, don't show struck out on the
+        # map... if it is sanctioned, show as sanctioned" -- a struck
+        # station still gets its normal available/sanctioned/proposed
+        # status from these flags; `struck` stays a separate field the
+        # frontend only surfaces inside that station's own drawer.
+        r['sidingStatus'] = _feature_status(
+            r['sidingAvailTM'] or r['sidingAvailRGM'],
+            r['sidingSancTM'] or r['sidingSancRGM'],
+            r['sidingPropTM'] or r['sidingPropRGM'],
+        )
+        r['rhStatus'] = _feature_status(r['rhAvail'], r['rhSanc'], r['rhProp'])
+        r['hasSiding'] = r['sidingStatus'] is not None
+        r['hasRH'] = r['rhStatus'] is not None
 
     srden_breakdown = _parse_srden_breakdown(payload, remark_by_station, strikeouts_by_div)
 
     map_stations, unmapped = [], []
     for r in station_rows:
-        has_entry = (r['sidingAvailTM'] or r['sidingSancTM'] or r['sidingAvailRGM'] or r['sidingSancRGM']
-                     or r['rhAvail'] or r['rhSanc'])
+        # Fixed 27-Nov-2026 per Shruti ("I see the proposed ones you have
+        # shown as zero, which is incorrect"): this gate used to omit the
+        # *Prop flags entirely, so a station whose ONLY entry was
+        # "Proposed" (no Available/Sanctioned flag at all, for siding OR
+        # rest house) was silently dropped before ever reaching the map
+        # or the unmapped list -- not shown anywhere, not even counted.
+        # Proposed is a real, distinct pipeline stage she explicitly
+        # wants to see and filter by, so it now counts as "has an entry"
+        # too, same as Available/Sanctioned always did.
+        has_entry = r['hasSiding'] or r['hasRH']
         if not has_entry:
             continue
         (map_stations if (r['lat'] is not None) else unmapped).append(r)
