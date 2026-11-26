@@ -15,6 +15,17 @@ Covers input-data-specification.md items 1 ("SWR Machine Details --
 Original Allocation") and 2 ("...Commissioning / Age"), which live as two
 tabs of this one Google Sheet and are pushed together in one payload.
 
+NOTE (confirmed live, 25-Nov-2026): the shape above is the documented/
+intended one, but swr_machine_details_sync.gs is currently pushing
+'commissioningDate' and 'age' SWAPPED -- every real row looks like
+{"commissioningDate": "-", "age": "Fri Apr 01 2005 13:30:00 GMT+0530
+(India Standard Time)", ...}, i.e. the real commissioning date (as a JS
+Date.toString() dump) in 'age', and a literal '-' placeholder in
+'commissioningDate'. extract_age_profile() below is written defensively
+against this -- it tries to parse an actual date out of EITHER field --
+so it keeps working whether or not/whenever that .gs bug gets fixed on
+the Sheets side.
+
 This replaces TWO local-file functions in run_pipeline.py:
   - extract_home_div(base)   -> (home_div, bare_type_div, norm)
   - extract_age_profile(base) -> [{MachineType, Machine, CommissioningDate,
@@ -23,6 +34,7 @@ Both read the same live row here, so fetch_payload() is called once and
 the two extract_* functions below each take that same payload dict,
 rather than each doing their own REST call.
 """
+import datetime
 import re
 
 import pipeline_helpers as ph
@@ -33,6 +45,117 @@ TABLE = "swr_machine_details"
 
 def fetch_payload():
     return supabase_client.fetch_latest_payload(TABLE)
+
+
+# ---------------------------------------------------------------------------
+# Fixed 25-Nov-2026 per Shruti ("I am able to see only the first 0 to 10
+# years, not further" -- Fleet Age Distribution showing ALL 99 machines in
+# the "0-10 yrs" bucket and nothing in any other one). Root cause confirmed
+# via a direct live Supabase pull of this table's real payload: swr_machine_
+# details_sync.gs currently pushes the 'age' and 'commissioningDate' fields
+# SWAPPED -- every row's real commissioning date (as a JS Date.toString()
+# dump, e.g. "Fri Apr 01 2005 13:30:00 GMT+0530 (India Standard Time)")
+# lands in 'age', while 'commissioningDate' is left as a literal '-' for
+# every row. The old extract_age_profile() below took 'age' as a
+# pre-computed "N years" string and pulled the first run of digits out of
+# it with a bare regex; since nearly every commissioning date in the source
+# sheet is month/year-only, Sheets/Apps Script normalizes it to the 1st of
+# that month, so the regex always found "01" first and reported age=1 for
+# virtually every machine -- exactly the observed symptom.
+#
+# Fixed defensively rather than assuming the Apps Script swap gets
+# corrected upstream (same approach already used for the Original
+# Allocation/Cumulative Progress BRM/PBR aliasing above): try to parse
+# EITHER field as an actual date (commissioningDate first -- the
+# documented/intended field -- then age, which is where today's swapped
+# value actually lives) and compute AgeYears ourselves from whichever one
+# parses, using today's date rather than trusting a possibly-stale
+# precomputed number. Only if neither field parses as a date at all do we
+# fall back to the OLD "number embedded in text" reading of 'age' (e.g. a
+# sheet that really does write "16 years" by hand one day), so a future,
+# differently-shaped sync still degrades sensibly instead of going straight
+# to None.
+#
+# Date shapes handled (all seen live, across this table and the newly
+# shared IOH/POH Planning sheet that uses the same "Date of Commissioning"
+# column): a JS Date.toString() dump; 'Mon-YY'/'Mon.YY' (e.g. "Aug-93",
+# "Dec.15"); 'dd.mm.yy'/'dd.mm.yyyy' (and '-'/'/' separators); and an ISO
+# timestamp. Two-digit years use the same 69-99->19xx / 00-68->20xx pivot
+# as the rest of this project.
+# ---------------------------------------------------------------------------
+_MONTH_ABBR = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+}
+_JS_DATE_TOSTRING_RE = re.compile(
+    r'^\w{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+\d{1,2}:\d{2}:\d{2}'
+)
+_ISO_DATE_RE = re.compile(r'^(\d{4})-(\d{1,2})-(\d{1,2})')
+_MON_YY_RE = re.compile(r'^([A-Za-z]{3})[.\-/](\d{2})$')
+_DMY_RE = re.compile(r'^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$')
+
+
+def _pivot_year(yy):
+    return 1900 + yy if yy >= 69 else 2000 + yy
+
+
+def _parse_commission_date(v):
+    """Best-effort parse of a 'date of commissioning'-ish value into a
+    datetime.date, or None if nothing recognised is found (blank, '-', or
+    genuinely free text like a hand-typed "16 years")."""
+    if v is None:
+        return None
+    if isinstance(v, datetime.datetime):
+        return v.date()
+    if isinstance(v, datetime.date):
+        return v
+    s = str(v).strip()
+    if not s or s == '-':
+        return None
+
+    m = _JS_DATE_TOSTRING_RE.match(s)
+    if m:
+        mon = _MONTH_ABBR.get(m.group(1).lower())
+        if mon:
+            try:
+                return datetime.date(int(m.group(3)), mon, int(m.group(2)))
+            except ValueError:
+                return None
+        return None
+
+    m = _ISO_DATE_RE.match(s)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+
+    m = _MON_YY_RE.match(s)
+    if m:
+        mon = _MONTH_ABBR.get(m.group(1).lower())
+        if mon:
+            return datetime.date(_pivot_year(int(m.group(2))), mon, 1)
+        return None
+
+    m = _DMY_RE.match(s)
+    if m:
+        day, mon, year_txt = int(m.group(1)), int(m.group(2)), m.group(3)
+        year = int(year_txt) if len(year_txt) == 4 else _pivot_year(int(year_txt))
+        try:
+            return datetime.date(year, mon, day)
+        except ValueError:
+            return None
+
+    return None
+
+
+def _age_years_from_date(d, today=None):
+    """Whole years between a commissioning date and today (or None for a
+    bad/future date)."""
+    today = today or datetime.date.today()
+    if d is None or d > today:
+        return None
+    return today.year - d.year - ((today.month, today.day) < (d.month, d.day))
 
 
 # ---------------------------------------------------------------------------
@@ -119,14 +242,12 @@ def extract_home_div(payload):
     return home_div, bare_type_div, _home_div_key
 
 
-def extract_age_profile(payload):
+def extract_age_profile(payload, today=None):
     """-> [{MachineType, MachineTypeFullName, Machine, CommissioningDate,
     AgeYears}, ...]. Mirrors run_pipeline.py's extract_age_profile(base).
     The live sync's parseAgeProfile() already skipped the machine-type
     banner rows (e.g. "BCM  (7 machines)") on the Apps Script side, so
-    every row here is already a real machine - only AgeYears needs the
-    same free-text -> int extraction run_pipeline.py does ("16 years" ->
-    16).
+    every row here is already a real machine.
 
     Fixed 18-Nov-2026 per Shruti ("the machine details are utilized
     elsewhere also, in age profile and all -- you connect it there
@@ -134,29 +255,55 @@ def extract_age_profile(payload):
     types a machine's raw alias prefix - FRM/PBR/SQRS/T/WST - reports its
     real canonical type here too, consistent with every other tab), and
     MachineTypeFullName is attached from the same pipeline_helpers.
-    MTYPE_FULL_NAME table the rest of the dashboard now uses. Neither
-    field is read by aggregate.py's own age-bucket rollup today (that
-    only needs AgeYears/Machine/CommissioningDate - see its own fix for
-    the actual age/commissioning-date JOIN, which is where the real
-    FRM/SBCM and PBR/BRM mismatch was silently dropping machines), but
-    both are carried through so a future consumer never has to re-derive
-    them from a raw, possibly-aliased type string."""
+    MTYPE_FULL_NAME table the rest of the dashboard now uses.
+
+    Fixed 25-Nov-2026 (see the module-level comment above _parse_commission_
+    date for the full root cause -- a swr_machine_details_sync.gs field-swap
+    bug was putting every machine's real commissioning date into 'age'
+    instead of 'commissioningDate'): AgeYears is no longer read verbatim off
+    'age' at all. We now try to parse an actual date out of
+    'commissioningDate' first (the documented, intended field), then 'age'
+    (where the live bug's real date currently lands), and compute AgeYears
+    ourselves from whichever one parses -- so this keeps working correctly
+    regardless of whether/when that Apps Script bug gets fixed on the
+    Sheets side. `today` is only for tests that need a fixed reference
+    date; production calls always get a live payload and leave it as the
+    real today."""
     rows = (payload or {}).get("ageProfile") or []
+    as_of = today or datetime.date.today()
     out = []
     for r in rows:
         machine = r.get("machine")
         if not machine:
             continue
-        age_txt = r.get("age")
-        agem = re.search(r'(\d+)', str(age_txt)) if age_txt else None
-        age = int(agem.group(1)) if agem else None
+
+        commissioning_raw = r.get("commissioningDate")
+        age_raw = r.get("age")
+
+        commission_date = _parse_commission_date(commissioning_raw)
+        if commission_date is None:
+            commission_date = _parse_commission_date(age_raw)
+
+        if commission_date is not None:
+            age = _age_years_from_date(commission_date, as_of)
+            disp_commission_date = commission_date.strftime('%d.%m.%Y')
+        else:
+            # Neither field parsed as a date -- last-resort fallback to the
+            # original behaviour (a hand-typed "16 years"-style age text).
+            agem = re.search(r'(\d+)', str(age_raw)) if age_raw else None
+            age = int(agem.group(1)) if agem else None
+            disp_commission_date = (
+                str(commissioning_raw).strip()
+                if commissioning_raw not in (None, '-', '') else None
+            )
+
         raw_type = r.get("machineType")
         disp_mtype = ph.disp_type(str(raw_type).strip().upper()) if raw_type else None
         out.append(dict(
             MachineType=disp_mtype,
             MachineTypeFullName=ph.MTYPE_FULL_NAME.get(disp_mtype) if disp_mtype else None,
             Machine=str(machine).strip(),
-            CommissioningDate=r.get("commissioningDate"),
+            CommissioningDate=disp_commission_date,
             AgeYears=age,
         ))
     return out
