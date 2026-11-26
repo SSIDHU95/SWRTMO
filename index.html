@@ -5386,7 +5386,14 @@ function drawActionPlan53(){
 
   renderApSupervisorLoad();
 
-  const cats = [...ap.categories].sort((a,b)=>b.count-a.count);
+  // Ordered by S.No (added 26-Nov-2026 per Shruti: "Keep these in the same
+  // series as the sr no of points. like safety, reliability and so on") --
+  // ap.categories already arrives in this order from the backend (a
+  // Counter built by scanning points in S.No order, so the first category
+  // encountered is whichever the lowest-numbered point belongs to), so no
+  // sort is applied here at all; it used to be re-sorted by count
+  // descending, which this replaces.
+  const cats = [...ap.categories];
   const el = document.getElementById('apCatChart');
   svgBar(el, {
     labels: cats.map(c=>apTitleCase(c.name)), horizontal:true,
