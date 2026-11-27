@@ -2562,29 +2562,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       </div>
     </div>
     <div class="card" id="ipNoteCard" style="display:none;"></div>
-    <div class="card">
-      <h3>Indent Position &mdash; Procurement Pipeline, Stage by Stage</h3>
-      <div class="cap" id="ipHeaderCap">Every indent currently in the procurement pipeline, from field demand to material received &bull; factual snapshot from the Indent Position workbook</div>
-    </div>
     <div class="kpirow" id="ipKpiRow"></div>
 
-    <div class="card" id="ipAttentionCard">
-      <div class="cardhead">
-        <div><h3>Needs Attention</h3><div class="cap">Auto-flagged from each stage's own ageing/due-date fields &mdash; not stated anywhere in the source sheets directly</div></div>
-      </div>
-      <div id="ipAttentionList"></div>
-    </div>
+
 
     <div class="card">
       <div class="cardhead">
-        <div><h3>Procurement Pipeline &mdash; by Stage &amp; Division</h3><div class="cap" id="ipFunnelCap">Every indent sitting at each stage right now, split UBL vs SBC &bull; click a stage bar for its full list</div></div>
-      </div>
-      <div class="chartwrap" id="ipFunnelWrap"><div id="ipFunnelChart" class="svgchart"></div></div>
-    </div>
-
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>By Pipeline Stage</h3><div class="cap">Click any stage for its full, clickable list of indents</div></div>
+        <div><h3>By Pipeline Stage</h3><div class="cap" id="ipStageCap">Click a stage for its list of indents</div></div>
       </div>
       <div class="ip-stage-grid" id="ipStageGrid"></div>
     </div>
@@ -8374,21 +8358,64 @@ function renderIpKpis(){
   const ip = DATA.indentPosition;
   const tot = ip.summary.byIndent.find(d=>/total/i.test(d.store)) || {total:0, stages:{}};
   const totI = ip.summary.byItem.find(d=>/total/i.test(d.store)) || {total:0, stages:{}};
-  const sentToStores = ['tenderToBePublished','tenderUnderFinalisation','poIssuedPendingReceipt','materialReceived'].reduce((s,k)=>s+(tot.stages[k]||0),0);
-  const underProcessing = ['underVetting','underConcurrence','indentSigning'].reduce((s,k)=>s+(tot.stages[k]||0),0);
-  const balance = ['balanceIndentsToBeProposed','indentUnderProcess'].reduce((s,k)=>s+(tot.stages[k]||0),0);
-  const attnByStage = ipAttentionByStage();
-  const highCount = (ip.attention||[]).filter(a=>a.severity==='high').length;
+  // 27-Nov-2026: if the sheet's own total column didn't come through, the
+  // total is the sum of the 9 stages (same as the Summary sheet's column B).
+  const sumOf = (d, keys)=> keys.reduce((s,k)=>s+((d.stages||{})[k]||0),0);
+  const totalOf = d => (d && d.total) ? d.total : sumOf(d||{stages:{}}, ip.stageOrder);
+  const sentToStores = sumOf(tot, IP_GROUPS.sent);
+  const underProcessing = sumOf(tot, IP_GROUPS.proc);
+  const balance = sumOf(tot, IP_GROUPS.bal);
   const kpis = [
-    {l:'Total Indents', v:Math.round(tot.total||0), hint:`${Math.round(totI.total||0)} items in all`, fn:()=>{}},
-    {l:'Sent to Stores', v:Math.round(sentToStores), hint:'Tender→Material Received', fn:()=>tcScrollToEl('ipStageGrid')},
-    {l:'Under Processing', v:Math.round(underProcessing), hint:'Vetting / Concurrence / Signing', fn:()=>tcScrollToEl('ipStageGrid')},
-    {l:'Balance Position', v:Math.round(balance), hint:'not yet an indent / proposed', fn:()=>tcScrollToEl('ipStageGrid')},
-    {l:'Safety Items', v:(ip.safetyItems||[]).length, hint:'cross-cutting, see below', fn:()=>tcScrollToEl('ipSafetyList')},
-    {l:'Needs Attention', v:(ip.attention||[]).length, hint: highCount? `${highCount} high-severity`:'auto-flagged ageing', fn:()=>tcScrollToEl('ipAttentionList')},
+    {l:'Total Indents', v:Math.round(totalOf(tot)), hint:`${Math.round(totalOf(totI))} items in all`, fn:()=>openIpGroupDrawer('Total Indents', ip.stageOrder, true)},
+    {l:'Sent to Stores', v:Math.round(sentToStores), hint:'Tender → Material Received', fn:()=>openIpGroupDrawer('Sent to Stores', IP_GROUPS.sent)},
+    {l:'Under Processing', v:Math.round(underProcessing), hint:'Vetting / Concurrence / Signing', fn:()=>openIpGroupDrawer('Under Processing', IP_GROUPS.proc)},
+    {l:'Balance Position', v:Math.round(balance), hint:'not yet an indent / proposed', fn:()=>openIpGroupDrawer('Balance Position', IP_GROUPS.bal)},
+    {l:'Safety Items', v:(ip.safetyItems||[]).length, hint:'safety-critical items', fn:()=>openIpSafetyListDrawer()},
   ];
   row.innerHTML = kpis.map(x=>`<div class="kpi"><div class="lbl">${esc(x.l)}</div><div class="val">${x.v}</div><div class="hint">${esc(x.hint||'')}</div></div>`).join('');
   Array.from(row.querySelectorAll('.kpi')).forEach((el,i)=> el.addEventListener('click', kpis[i].fn));
+}
+const IP_GROUPS = {
+  sent: ['tenderToBePublished','tenderUnderFinalisation','poIssuedPendingReceipt','materialReceived'],
+  proc: ['underVetting','underConcurrence','indentSigning'],
+  bal:  ['balanceIndentsToBeProposed','indentUnderProcess'],
+};
+// Indent Position KPI tiles -> a drawer listing the stages behind that
+// number (each stage opens its own clickable list of indents). Counts are
+// the Summary sheet's, same as the tile itself.
+function openIpGroupDrawer(title, keys, withStores){
+  const ip = DATA.indentPosition;
+  if (!ip) return;
+  const pick = (rows)=> rows.find(d=>/total/i.test(d.store)) || {stages:{}};
+  const tot = pick(ip.summary.byIndent), totI = pick(ip.summary.byItem);
+  const sum = (d)=> keys.reduce((s,k)=>s+((d.stages||{})[k]||0),0);
+  const nInd = Math.round(sum(tot)), nItm = Math.round(sum(totI));
+  let html = statRow([{l:'Indents', v:nInd}, {l:'Items', v:nItm}]);
+  if (withStores){
+    const stores = ip.summary.byIndent.filter(d=>!/total/i.test(d.store));
+    const items = ip.summary.byItem;
+    html += dcard('By Store', null, stores.map(d=>{
+      const di = items.find(x=>x.store===d.store) || {stages:{}};
+      const n = Math.round(sum(d)); return breakRow(d.store, `${Math.round(sum(di))} item(s)`, `${n} indent${n===1?'':'s'}`, null, null);
+    }).join(''));
+  }
+  html += dcard('By Stage', 'click a stage for its list of indents', keys.map(k=>{
+    const s = ip.stages[k] || {label:k};
+    const n = Math.round((tot.stages||{})[k]||0); return breakRow(s.label, `${Math.round((totI.stages||{})[k]||0)} item(s)`, `${n} indent${n===1?'':'s'}`, null, ()=>openIpStageDrawer(k));
+  }).join(''));
+  const asOn = ip.summary.sheetAsOn ? `as on ${esc(ip.summary.sheetAsOn)}` : `as of ${esc(ip.asOf)}`;
+  openDrawer(title, `${nInd} indent(s) &bull; ${nItm} item(s) &bull; ${asOn}`, html);
+}
+function openIpSafetyListDrawer(){
+  const ip = DATA.indentPosition;
+  if (!ip) return;
+  const rows = ip.safetyItems||[];
+  const html = rows.length ? rows.map(r=> breakRow(
+      (r.description||'Safety item').slice(0,90),
+      `${esc(r.indentNo||'—')} &bull; ${esc(r.indentValue||'—')} &bull; ${esc(r.currentStatus||'—')}`,
+      '', null, ()=>openIpSafetyDrawer(r.sno))).join('')
+    : '<div class="emptynote" style="padding:24px 0;">No safety-item records found.</div>';
+  openDrawer('Safety Items', `${rows.length} item(s) &bull; click an item for full detail`, html);
 }
 function tcScrollToEl(id){ const el=document.getElementById(id); if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
 function renderIpAttention(){
@@ -8436,13 +8463,12 @@ function renderIpStageGrid(){
   if (!grid) return;
   const ip = DATA.indentPosition;
   if (!ip){ grid.innerHTML = '<div class="emptynote">No data</div>'; return; }
-  const attnByStage = ipAttentionByStage();
+  const cap = document.getElementById('ipStageCap');
+  if (cap) cap.textContent = (ip.summary && ip.summary.sheetAsOn ? `Position as on ${ip.summary.sheetAsOn} \u2022 ` : '') + 'Click a stage for its list of indents';
   grid.innerHTML = ip.stageOrder.map((k,i)=>{
     const s = ip.stages[k];
-    const a = attnByStage[k];
-    const flagCls = a ? (a.high>0 ? ' flagged-high' : ' flagged') : '';
-    const flagTxt = a ? `<div class="ipsc-flag${a.high>0?' high':''}">${a.count} flagged</div>` : '';
-    return `<div class="ip-stage-card${flagCls}" data-k="${k}">
+    const flagTxt = '';
+    return `<div class="ip-stage-card" data-k="${k}">
       <div class="ipsc-n">STAGE ${i+1} OF ${ip.stageOrder.length}</div>
       <div class="ipsc-lbl">${esc(s.label)}</div>
       <div class="ipsc-stats">
@@ -8532,7 +8558,7 @@ function openIpSummaryDrawer(){
   const ip = DATA.indentPosition;
   if (!ip) return;
   const keys = ip.summary.stageKeys, labels = ip.summary.stageLabels;
-  const table = (rows)=> rows.map(d=> dcard(d.store, `Total: ${Math.round(d.total||0)}`, statRow(
+  const table = (rows)=> rows.map(d=> dcard(d.store, `Total: ${Math.round(d.total || keys.reduce((s,k)=>s+(d.stages[k]||0),0))}`, statRow(
     keys.map(k=>({l: labels[k], v: Math.round(d.stages[k]||0)}))
   ))).join('');
   const html = dcard('By Indent Count', null, table(ip.summary.byIndent)) + dcard('By Item Count', null, table(ip.summary.byItem));
@@ -8546,11 +8572,8 @@ function setupIpSafetySearch(){
 }
 function drawIpCharts(){
   renderIpNote();
-  renderIpHeader();
   setupIpAuthoritySection();
   renderIpKpis();
-  renderIpAttention();
-  renderIpFunnel();
   renderIpStageGrid();
   renderIpSafetyList(document.getElementById('ipSafetySearch') ? document.getElementById('ipSafetySearch').value : '');
 }
@@ -9423,7 +9446,6 @@ function renderTabBadges(){
     fleet: {n: overdueCount},
     infra: {n: infraCount},
     tenders: {n: tcCount},
-    indent: {n: ipCount},
   };
   Object.keys(counts).forEach(mod=>{
     const btn = nav.querySelector(`button[data-mod="${mod}"]`);
@@ -10961,7 +10983,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
       infra.srdenTable.forEach(row=>{ const sid=row.sidingStatus||{}, rh=row.rhStatus||{}; infraCount += (sid['Sanctioned']||0)+(sid['Proposed']||0)+(rh['Sanctioned']||0)+(rh['Proposed']||0); });
     }
     const tc = DATA.tendersContracts; const tcCount = tc ? (tc.attention||[]).length : 0;
-    const ip = DATA.indentPosition; const ipCount = ip ? (ip.attention||[]).length : 0;
+    const ip = DATA.indentPosition; const ipCount = ip ? (ip.stageOrder||[]).reduce((s,k)=>s+((ip.stages[k]||{}).indentCount||0),0) : 0;
     return {active, underComm, deputed, overallPct, excOpen, shortfallCount, dsCount, apCount, overdueCount, infraCount, tcCount, ipCount};
   }
 
@@ -10978,7 +11000,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
     {kw:['action plan','53 point','53-point','stalled'], ans:c=>`${c.apCount} item(s) on the 53-Point Action Plan need attention (stalled or flagged nil).`},
     {kw:['infra','siding','rest house'], ans:c=>`${c.infraCount} infrastructure item(s) (sidings/rest houses) are pending.`},
     {kw:['tender','contract'], ans:c=>`${c.tcCount} tender/contract item(s) need attention.`},
-    {kw:['indent'], ans:c=>`${c.ipCount} indent(s) need attention.`},
+    {kw:['indent'], ans:c=>`${c.ipCount} indent(s) in the procurement pipeline \u2014 open the Indent Position tab for the stage-wise list.`},
     {kw:['as of','updated','date','period covered'], ans:c=>`Data is as of ${DATA.meta.asOf} (period covered: ${DATA.meta.periodCovered||'—'}).`},
   ];
   function tryStatusQA(text){
@@ -11051,7 +11073,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
     lines.push(`Open exceptions: ${c.excOpen}. IOH/POH overdue: ${c.overdueCount}.`);
     lines.push(`Sr.DEN jurisdictions flagged for shortfall: ${c.shortfallCount}. Shifts over 12h: ${c.dsCount}.`);
     lines.push(`53-Point Action Plan items needing attention: ${c.apCount}. Infra items pending: ${c.infraCount}.`);
-    lines.push(`Tenders/contracts needing attention: ${c.tcCount}. Indents pending: ${c.ipCount}.`);
+    lines.push(`Tenders/contracts needing attention: ${c.tcCount}. Indents in pipeline: ${c.ipCount}.`);
     try{
       const today = Object.assign({asOf: DATA.meta.asOf}, c);
       const prevRaw = localStorage.getItem('samarthDailySnapshot');
