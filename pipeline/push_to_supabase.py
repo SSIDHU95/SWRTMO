@@ -81,7 +81,15 @@ def _headers(service_key, extra=None):
 
 def _insert(base_url, service_key, table, dashboard_payload, timeout=30):
     body = json.dumps({"payload": dashboard_payload}).encode("utf-8")
-    url = f"{base_url.rstrip('/')}/rest/v1/{table}"
+    # `?select=id,updated_at` on the INSERT trims what `Prefer:
+    # return=representation` hands back to just the two fields `push()`
+    # actually reads below -- without it, PostgREST echoes the ENTIRE
+    # inserted row back, including the full multi-MB `payload` column
+    # that was just sent up a moment ago. Found 27-Nov-2026 while
+    # diagnosing excess Supabase egress: this table's `dashboard_payload`
+    # is 4-5 MB, so every push was silently uploading it AND downloading
+    # it again right back, doubling this step's egress for no reason.
+    url = f"{base_url.rstrip('/')}/rest/v1/{table}?select=id,updated_at"
     req = urllib.request.Request(
         url,
         data=body,

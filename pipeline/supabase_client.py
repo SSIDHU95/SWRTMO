@@ -16,11 +16,34 @@ Env vars (same two names used by every .gs script in this project):
   SUPABASE_URL
   SUPABASE_ANON_KEY
 """
+import gzip
 import os
 import sys
 import urllib.request
 import urllib.error
 import json
+
+
+def _maybe_gunzip(resp, body):
+    """Supabase/PostgREST will gzip a response body when the client asks
+    for it via Accept-Encoding -- but Python's urllib, unlike a browser or
+    `curl --compressed`, never asks for this automatically and never
+    decompresses it either, so every GET in this module was silently
+    pulling the full, uncompressed JSON over the wire on every call.
+
+    Found 27-Nov-2026 while diagnosing why Supabase egress (outgoing
+    data) had gone well over the free plan's 5 GB/month limit: confirmed
+    directly against the live project that the exact same rdps_points
+    page (~430,000-row table, fetched up to twice a day by fetch_rows())
+    came back as 172,511 bytes plain vs. 10,189 bytes gzip-compressed --
+    about a 17x difference. Every fetch function below now sends
+    `Accept-Encoding: gzip` and this helper transparently decompresses
+    the response if the server actually honoured it (PostgREST always
+    does for a JSON body of any real size, but this stays a no-op rather
+    than an error if a tiny response ever comes back uncompressed)."""
+    if resp.headers.get("Content-Encoding", "").lower() == "gzip":
+        return gzip.decompress(body)
+    return body
 
 
 class SupabaseFetchError(RuntimeError):
@@ -58,11 +81,12 @@ def fetch_latest_payload(table, required=True):
         headers={
             "apikey": _anon_key(),
             "Authorization": f"Bearer {_anon_key()}",
+            "Accept-Encoding": "gzip",
         },
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read()
+            body = _maybe_gunzip(resp, resp.read())
     except urllib.error.HTTPError as e:
         raise SupabaseFetchError(
             f"Fetching '{table}' failed: HTTP {e.code} -- {e.read().decode(errors='replace')}"
@@ -101,11 +125,12 @@ def fetch_all_payloads(table, limit=2000):
         headers={
             "apikey": _anon_key(),
             "Authorization": f"Bearer {_anon_key()}",
+            "Accept-Encoding": "gzip",
         },
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
-            body = resp.read()
+            body = _maybe_gunzip(resp, resp.read())
     except urllib.error.HTTPError as e:
         raise SupabaseFetchError(
             f"Fetching all rows of '{table}' failed: HTTP {e.code} -- {e.read().decode(errors='replace')}"
@@ -184,11 +209,12 @@ def fetch_rows(table, select="*", params="", limit=20000, page_size=1000, order=
                 "Authorization": f"Bearer {_anon_key()}",
                 "Range-Unit": "items",
                 "Range": f"{offset}-{offset + page_size - 1}",
+                "Accept-Encoding": "gzip",
             },
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                body = resp.read()
+                body = _maybe_gunzip(resp, resp.read())
         except urllib.error.HTTPError as e:
             # A 416 here means the table has fewer rows than `offset` -
             # i.e. we already read every row on the previous page - treat
