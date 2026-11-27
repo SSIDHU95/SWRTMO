@@ -535,7 +535,7 @@ PROPOSAL_STAGE_ORDER = [
     ('concurrence_obtained', 'Concurrence Obtained', re.compile(r'concurrence obtained', re.I)),
     ('concurrence_sent', 'Sent for Concurrence', re.compile(r'(?:sent|send) for concurr?ence|concurernce', re.I)),
     ('admin_approval_obtained', 'Administrative Approval Obtained', re.compile(r'admin\w* a\w*proval obtained|approval obtained', re.I)),
-    ('admin_approval_sent', 'Sent for Administrative Approval', re.compile(r'sent (?:to hq )?for administrative approval', re.I)),
+    ('admin_approval_sent', 'Sent for Administrative Approval', re.compile(r'sent (?:to hq )?for adm\w*\s+approval', re.I)),
     ('under_preparation', 'Proposal Under Preparation', re.compile(r'under preparation|to be initiated', re.I)),
 ]
 
