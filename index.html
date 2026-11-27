@@ -8239,6 +8239,8 @@ function ipRowsForAuthority(key){
   return out;
 }
 function ipDaysPendingFor(r){
+  if (r.daysInStatus!=null) return r.daysInStatus;
+  if (r.daysNote) return null;
   if (r.daysPending!=null) return r.daysPending;
   if (r.durationInCurrentStatus!=null) return r.durationInCurrentStatus;
   if (r.daysPendingSinceOpening!=null) return r.daysPendingSinceOpening;
@@ -8531,7 +8533,11 @@ function openIpRowDrawer(stageKey, sno){
   const s = ip.stages[stageKey];
   const r = (s.rows||[]).find(x=>x.sno===sno);
   if (!r){ openIpStageDrawer(stageKey); return; }
-  const fields = (IP_FIELD_LABELS[stageKey] || []).slice();
+  // one days figure only: it sits in the top tiles, so the sheet's raw day
+  // columns are not repeated in Full Detail (they could disagree with it)
+  const IP_RAW_DAY_FIELDS = ['durationInCurrentStatus','daysPendingSinceOpening','daysSincePo','daysPending'];
+  const hideRawDays = r.daysInStatus!=null || !!r.daysNote;
+  const fields = (IP_FIELD_LABELS[stageKey] || []).filter(f=> !(hideRawDays && IP_RAW_DAY_FIELDS.includes(f[0])));
   [['statusSince','In Current Status Since'],['machines','Machines'],['poValue','PO Value'],['deliveryDateQty','Delivery Date / Quantity'],['remarks','Remarks']]
     .forEach(f=>{ if (!fields.some(x=>x[0]===f[0])) fields.push(f); });
   const body = fields.map(([k,label])=>{
