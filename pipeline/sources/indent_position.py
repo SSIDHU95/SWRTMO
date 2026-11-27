@@ -333,14 +333,33 @@ def _summary_table(summary_rows):
                 continue
             if not isinstance(v, (int, float)):
                 continue
-            if header.strip().lower() == "total":
+            hl = re.sub(r'\s+', ' ', str(header)).strip().lower()
+            # "Total" / "Total Indents of SWR" / "Total items" -- the Summary
+            # sheet's own total column, whatever its exact wording.
+            if hl == "total" or hl.startswith("total "):
                 total = v
                 continue
             key = _match_stage_key(header)
             if key:
                 stages[key] = v
+        # Fixed 27-Nov-2026: the live sync's Summary rows carry only the 9
+        # stage columns, not column B ("Total Indents of SWR" / "Total
+        # items"), so the website's "Total Indents" tile read 0. On the
+        # sheet itself that column is exactly the sum of the 9 stages
+        # (checked against Shruti's INDENT_POSITION.xlsx: UBL 114, SBC 19,
+        # TOTAL 133 indents; 655/21/676 items) -- so when no explicit total
+        # arrives, use that same sum rather than showing 0.
+        if not total:
+            total = sum(v for v in stages.values() if isinstance(v, (int, float)))
         out.append(dict(store=_clean_text(store), total=total, stages=stages))
     return out
+
+
+def _as_on_date(title):
+    """'Indent position as on 16.11.2026' -> '16.11.2026' (the sheet's own
+    date for its Summary figures), else None."""
+    m = re.search(r'as\s+on\s+([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4})', str(title or ''), re.I)
+    return m.group(1) if m else None
 
 
 def extract_summary(payload):
@@ -354,15 +373,18 @@ def extract_summary(payload):
     tables."""
     blocks = (payload or {}).get("summary") or []
     by_indent, by_item = [], []
+    sheet_as_on = None
     for block in blocks:
-        title = str(block.get("title") or "").lower()
+        raw_title = block.get("title") or ""
+        title = str(raw_title).lower()
         rows = _summary_table(block.get("rows"))
         if "item" in title:
             by_item = rows
         else:
             by_indent = rows
+            sheet_as_on = _as_on_date(raw_title) or sheet_as_on
     return dict(stageKeys=INDENT_STAGE_KEYS, stageLabels=INDENT_STAGE_LABELS,
-                byIndent=by_indent, byItem=by_item)
+                byIndent=by_indent, byItem=by_item, sheetAsOn=sheet_as_on)
 
 
 def extract_safety_items(payload):
