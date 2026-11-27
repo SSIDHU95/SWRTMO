@@ -7854,21 +7854,46 @@ function ipDaysOverdue(iso){
   return Math.round((ipParseAsOf()-d)/86400000);
 }
 
+// "Days since current status" (27-Nov-2026): the pipeline now adds
+// daysInStatus/daysNote to every stage row that has a status-start date;
+// lists sort on it, longest first. `legacy` is the old per-stage field,
+// used only until the next data refresh brings daysInStatus in.
+function ipDaysVal(r, legacy){
+  if (r.daysInStatus!=null) return r.daysInStatus;
+  if (r.daysNote) return null;
+  const v = legacy!=null ? r[legacy] : null;
+  return (typeof v==='number' && v>0) ? Math.round(v) : null;
+}
+function ipDaysCount(r, legacy){
+  const d = ipDaysVal(r, legacy);
+  if (d!=null) return `${d} day${d===1?'':'s'}`;
+  return r.daysNote ? esc(r.daysNote) : '—';
+}
+function ipDaysSort(r, legacy){
+  const d = ipDaysVal(r, legacy);
+  if (d!=null) return d;
+  if (r.daysNote){
+    // tenders not yet opened: soonest opening first, after the opened ones
+    const od = ipDaysOverdue(r.tenderOpeningDateIso);
+    return od!=null ? -1 + od/1000 : -1;
+  }
+  return -2;
+}
 const IP_STAGE_LIST_CONFIG = {
   tenderToBePublished: {
     sub:r=>`${esc(r.purchaseUnit||'—')} &bull; ${esc(r.indentValue||'—')} &bull; ${esc(r.indentNo||'')}`,
-    count:r=> r.durationInCurrentStatus!=null? `${Math.round(r.durationInCurrentStatus)}d` : '—',
-    sort:r=> r.durationInCurrentStatus||0,
+    count:r=> ipDaysCount(r,'durationInCurrentStatus'),
+    sort:r=> ipDaysSort(r,'durationInCurrentStatus'),
   },
   tenderUnderFinalisation: {
     sub:r=>`${esc(r.tenderNo||'—')} &bull; ${esc(r.indentValue||'—')}`,
-    count:r=> r.daysPendingSinceOpening!=null? `${Math.round(r.daysPendingSinceOpening)}d` : '—',
-    sort:r=> r.daysPendingSinceOpening||0,
+    count:r=> ipDaysCount(r,'daysPendingSinceOpening'),
+    sort:r=> ipDaysSort(r,'daysPendingSinceOpening'),
   },
   poIssuedPendingReceipt: {
-    sub:r=>`${esc(r.poNumber||'—')} &bull; due ${esc(r.dueDeliveryDate||'—')}`,
-    count:r=>{ const od = ipDaysOverdue(r.dueDeliveryDateIso); return od!=null && od>0 ? `${od}d late` : (od!=null? 'on track':'—'); },
-    sort:r=> ipDaysOverdue(r.dueDeliveryDateIso)||-9999,
+    sub:r=>{ const od = ipDaysOverdue(r.dueDeliveryDateIso); return `${esc(r.poNumber||'—')} &bull; delivery due ${esc(r.dueDeliveryDate||'—')}${od!=null && od>0 ? ` (<b style="color:var(--bad)">${od} days late</b>)` : ''}`; },
+    count:r=> ipDaysCount(r,null),
+    sort:r=> ipDaysSort(r,null),
   },
   materialReceived: {
     sub:r=>`${esc(r.poNumber||'—')} &bull; ${esc(r.poDate||'—')}`,
@@ -7877,22 +7902,22 @@ const IP_STAGE_LIST_CONFIG = {
   },
   underVetting: {
     sub:r=>`${esc(r.purchaseUnit||'—')} &bull; ${esc(r.indentValue||'—')}`,
-    count:r=> r.daysPending!=null? `${Math.round(r.daysPending)}d` : '—',
-    sort:r=> r.daysPending||0,
+    count:r=> ipDaysCount(r,'daysPending'),
+    sort:r=> ipDaysSort(r,'daysPending'),
   },
   underConcurrence: {
     sub:r=>`${esc(r.purchaseUnit||'—')} &bull; ${esc(r.indentValue||'—')}`,
-    count:r=> r.daysPending!=null? `${Math.round(r.daysPending)}d` : '—',
-    sort:r=> r.daysPending||0,
+    count:r=> ipDaysCount(r,'daysPending'),
+    sort:r=> ipDaysSort(r,'daysPending'),
   },
   indentSigning: {
     sub:r=>`with ${esc(r.currentHolder||'—')} &bull; ${esc(r.indentValue||'—')}`,
-    count:r=> r.daysPending!=null? `${Math.round(r.daysPending)}d` : '—',
-    sort:r=> r.daysPending||0,
+    count:r=> ipDaysCount(r,'daysPending'),
+    sort:r=> ipDaysSort(r,'daysPending'),
   },
   balanceIndentsToBeProposed: {
     sub:r=>`${esc(r.itemCategory||'—')} &bull; target ${esc(r.targetDateForProposal||'—')}`,
-    count:r=>{ const od = ipDaysOverdue(r.targetDateForProposalIso); return od!=null && od>0 ? `${od}d overdue` : (od!=null? 'on track':'—'); },
+    count:r=>{ const od = ipDaysOverdue(r.targetDateForProposalIso); if (od==null) return '—'; if (od>0) return `${od} day${od===1?'':'s'} overdue`; return od===0 ? 'due today' : `due in ${-od} day${od===-1?'':'s'}`; },
     sort:r=> ipDaysOverdue(r.targetDateForProposalIso)||-9999,
   },
   indentUnderProcess: {
@@ -8248,14 +8273,17 @@ function openIpRowDrawer(stageKey, sno){
   const s = ip.stages[stageKey];
   const r = (s.rows||[]).find(x=>x.sno===sno);
   if (!r){ openIpStageDrawer(stageKey); return; }
-  const fields = IP_FIELD_LABELS[stageKey] || [];
+  const fields = (IP_FIELD_LABELS[stageKey] || []).slice();
+  [['statusSince','In Current Status Since'],['machines','Machines'],['poValue','PO Value'],['deliveryDateQty','Delivery Date / Quantity'],['remarks','Remarks']]
+    .forEach(f=>{ if (!fields.some(x=>x[0]===f[0])) fields.push(f); });
   const body = fields.map(([k,label])=>{
     const v = r[k];
     if (v==null || v==='') return '';
     return `<div class="drawer-row"><div class="t1">${esc(label)}</div><div class="t2" style="white-space:normal;">${esc(v)}</div></div>`;
   }).join('');
   const html = backBtn('Back to '+s.label, ()=>openIpStageDrawer(stageKey)) +
-    statRow([{l:'Sl. No.', v: r.sno}, {l:'No. of Items', v: r.noOfItems!=null? r.noOfItems : '—'}]) +
+    statRow([{l:'Sl. No.', v: r.sno}, {l:'No. of Items', v: r.noOfItems!=null? r.noOfItems : '—'}].concat(
+      (r.daysInStatus!=null || r.daysNote) ? [{l:'Days in Current Status', v: r.daysInStatus!=null ? r.daysInStatus : esc(r.daysNote)}] : [])) +
     dcard('Full Detail', null, body);
   openDrawer((r.description||'Indent').slice(0,80), `${s.label} &bull; S.No ${r.sno} &bull; as of ${esc(ip.asOf)}`, html);
 }
