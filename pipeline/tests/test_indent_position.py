@@ -59,10 +59,13 @@ if __name__ == "__main__":
 
 
 class TestDaysInStatus(unittest.TestCase):
-    """27-Nov-2026: "days since current status" is worked out from each
-    stage's status-start date (like the sheet's own TODAY()-date formula),
-    falling back to the sheet's number -- decoded when the sheet formats a
-    day count as a date -- only when there is no usable date."""
+    """27-Nov-2026: one "days in current status" figure per indent. The
+    sheet's own day count wins (decoded when the sheet formats it as a
+    date); the status-start date is used only when that count is blank,
+    unreadable or 0. Changed after Shruti found S.No 17 (Tender to be
+    Published) showing 240 days computed from 'Sent to Purchase Unit'
+    01.04.2026 while her sheet said 15 -- the indent had restarted that
+    status after an LOA was withdrawn, so the old date was misleading."""
     AS_OF = __import__('datetime').date(2026, 11, 27)
 
     def _stage(self, key, row):
@@ -96,6 +99,30 @@ class TestDaysInStatus(unittest.TestCase):
         st = self._stage('underVetting', {'sno': 1, 'sentOn': '17.11.2027', 'sentOnIso': '2027-11-17', 'daysPending': 9})
         ip.add_days_in_status(st, self.AS_OF)
         self.assertEqual(st['underVetting']['rows'][0]['daysInStatus'], 9)
+
+
+    def test_sheet_count_wins_over_older_status_date(self):
+        st = self._stage('tenderToBePublished', {'sno': 17, 'sentToPurchaseUnit': '01.04.2026',
+                                                'sentToPurchaseUnitIso': '2026-04-01',
+                                                'durationInCurrentStatus': 15})
+        ip.add_days_in_status(st, self.AS_OF)
+        r = st['tenderToBePublished']['rows'][0]
+        self.assertEqual(r['daysInStatus'], 15)
+        self.assertIsNone(r['statusSince'])  # the date doesn't explain 15 days
+
+    def test_matching_sheet_count_keeps_its_status_date(self):
+        st = self._stage('tenderToBePublished', {'sno': 1, 'sentToPurchaseUnit': '06.02.2026',
+                                                'sentToPurchaseUnitIso': '2026-02-06',
+                                                'durationInCurrentStatus': 294})
+        ip.add_days_in_status(st, self.AS_OF)
+        r = st['tenderToBePublished']['rows'][0]
+        self.assertEqual((r['daysInStatus'], r['statusSince']), (294, '06.02.2026'))
+
+    def test_opened_tender_with_zero_uses_opening_date(self):
+        st = self._stage('tenderUnderFinalisation', {'sno': 2, 'tenderOpeningDate': '12.10.2026',
+                                                    'tenderOpeningDateIso': '2026-10-12', 'daysPendingSinceOpening': 0})
+        ip.add_days_in_status(st, self.AS_OF)
+        self.assertEqual(st['tenderUnderFinalisation']['rows'][0]['daysInStatus'], 46)
 
 
 class TestHeaderAlternates(unittest.TestCase):
