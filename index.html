@@ -2439,19 +2439,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
        agreement already has a renewal in the pipeline. ============ -->
   <section class="module" id="mod-tenders">
     <div class="card" id="tcNoteCard" style="display:none;"></div>
-    <div class="card">
-      <h3>Tenders &amp; Contracts &mdash; AMC Agreements, OEM Contacts &amp; the Tender Pipeline</h3>
-      <div class="cap" id="tcHeaderCap">All AMC and works-contract agreements, who to call for each, what's already in motion to renew them, and where every open tender and LOA actually stands &bull; factual snapshot from the Contract Details workbook</div>
-    </div>
     <div class="kpirow" id="tcKpiRow"></div>
-
-    <!-- Needs Attention: the one synthesized, cross-sheet insight -->
-    <div class="card" id="tcAttentionCard">
-      <div class="cardhead">
-        <div><h3>Needs Attention</h3><div class="cap">Auto-flagged by cross-checking agreements against the proposal pipeline and tender/LOA remarks &mdash; not stated anywhere in the source sheets directly</div></div>
-      </div>
-      <div id="tcAttentionList"></div>
-    </div>
 
     <!-- Contract Runway: date-scaled timeline of every agreement's life -->
     <div class="card">
@@ -2466,68 +2454,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
         <span><i style="background:var(--navy)"></i>Today</span>
       </div>
       <div class="chartwrap" id="tcRunwayWrap"><div id="tcRunwayChart" class="svgchart"></div></div>
-    </div>
-
-    <!-- Agreement register -->
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Agreement Register</h3><div class="cap">Every AMC &amp; works-contract agreement &bull; click any card for full detail, bill status, OEM contact and renewal pipeline</div></div>
-        <button class="btn" id="tcSourceBtn">View source sheet</button>
-      </div>
-      <div class="searchbar">
-        <input type="text" id="tcAgSearch" placeholder="Search firm, work, LOA no...">
-        <select id="tcAgTypeFilter"><option value="">All contract types</option></select>
-        <select id="tcAgStatusFilter">
-          <option value="">All statuses</option>
-          <option value="Expired">Expired</option>
-          <option value="Expiring Soon">Expiring Soon</option>
-          <option value="Valid">Valid</option>
-        </select>
-        <select id="tcAgSort">
-          <option value="expiry">Sort: soonest expiry first</option>
-          <option value="value">Sort: highest value first</option>
-          <option value="name">Sort: firm name A&ndash;Z</option>
-        </select>
-      </div>
-      <div class="cap" id="tcAgCap"></div>
-      <div class="exc-list" id="tcAgList" style="max-height:760px; overflow-y:auto;"></div>
-    </div>
-
-    <!-- OEM / AMC contact directory -->
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>OEM &amp; AMC Contact Directory</h3><div class="cap">Who to call for each AMC &mdash; grouped as in the source sheet &bull; click a card to see which agreements it covers</div></div>
-      </div>
-      <div class="searchbar">
-        <input type="text" id="tcContactSearch" placeholder="Search AMC, person or phone number...">
-      </div>
-      <div id="tcContactGroups"></div>
-    </div>
-
-    <!-- AMC / Works proposal pipeline — approval stepper -->
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Status of New AMC &amp; Works Proposals</h3><div class="cap">Where each proposal actually sits in the approval chain &bull; click a stepper for the full remark and dates</div></div>
-      </div>
-      <div class="dsub-nav" id="tcProposalSectionToggle"></div>
-      <div id="tcProposalList"></div>
-    </div>
-
-    <!-- Tender Under Finalization — Kanban -->
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>Tender Under Finalization</h3><div class="cap">Grouped by real pipeline stage, read from each tender's own remarks &bull; click a card for remarks, who it's pending with, and TC/TAA composition</div></div>
-      </div>
-      <div class="tblwrap"><div id="tcKanbanBoard" class="tc-kanban"></div></div>
-    </div>
-
-    <!-- LOA issued register -->
-    <div class="card">
-      <div class="cardhead">
-        <div><h3>LOA Issued by Tender Section</h3><div class="cap">Grouped by financial year &bull; click a card for the agreement-finalization trail</div></div>
-      </div>
-      <div class="dsub-nav" id="tcLoaFyToggle"></div>
-      <div id="tcLoaList"></div>
     </div>
   </section>
 
@@ -6065,7 +5991,7 @@ function openUcMachineDrawer(machineKey){
     {l:'Spares', v: fmtRs(m.spares)},
     {l:'IOH/POH Proportional', v: fmtRs(m.iohPohProportional)},
   ]));
-  html += dcard('Usage &amp; Output', null, statRow([
+  html += dcard('Usage & Output', null, statRow([
     {l:'Days Worked', v: m.daysWorked??'—'},
     {l:'Annual Output', v: m.annualOutput!=null?`${m.annualOutput} ${esc(m.unit||'')}`:'—'},
     {l:'Output/Day', v: m.outputPerDay!=null?Number(m.outputPerDay).toFixed(2):'—'},
@@ -7258,7 +7184,7 @@ function openInfraMapSectionDrawer(div, slNo){
 function infraMapSrdenCardHtml(div){
   const rows = (DATA.infraMap && DATA.infraMap.srdenBreakdown && DATA.infraMap.srdenBreakdown[div]) || [];
   if (!rows.length) return '';
-  return dcard('Section-wise Siding &amp; Rest House status (live, with remarks)', 'click a section for the full TM/RGM/Rest-House breakdown', rows.map(s=>{
+  return dcard('Section-wise Siding & Rest House status (live, with remarks)', 'click a section for the full TM/RGM/Rest-House breakdown', rows.map(s=>{
     const availCount = ((s.tm&&s.tm.availableStations.length)||0) + ((s.rgm&&s.rgm.availableStations.length)||0) + ((s.rh&&s.rh.availableStations.length)||0);
     return breakRow(s.majorSection || ('Section '+s.slNo), `${s.stations||0} stations &bull; ${esc(s.srden||'')}`, availCount, s.stations? availCount/(s.stations*3): null, ()=>openInfraMapSectionDrawer(div, s.slNo));
   }).join(''));
@@ -7541,15 +7467,15 @@ function renderTcKpis(){
   }
   const k = tc.kpi;
   const kpis = [
-    {l:'Total Agreements', v:k.totalAgreements, hint:`${k.activeAgreements} currently valid`, fn:()=>tcScrollTo('tcAgList')},
-    {l:'Committed Value', v: fmtRs(k.totalCommittedValue), hint:'sum of latest agreement/revised values', fn:()=>tcScrollTo('tcAgList')},
-    {l:'Expiring Soon', v:k.expiringSoonCount, hint:'within 90 days', fn:()=>tcSetAgFilter('Expiring Soon')},
-    {l:'Expired', v:k.expiredCount, hint:'past currency date', fn:()=>tcSetAgFilter('Expired')},
-    {l:'Proposals in Pipeline', v:k.proposalsInPipeline, hint:'new AMC / works proposals', fn:()=>tcScrollTo('tcProposalList')},
-    {l:'Tenders Under Finalization', v:k.tendersUnderFinalization, hint:'in the TC/TAA pipeline', fn:()=>tcScrollTo('tcKanbanBoard')},
+    {l:'Total Agreements', v:k.totalAgreements, hint:`${k.activeAgreements} currently valid`, fn:()=>openTcAgListDrawer('all')},
+    {l:'Committed Value', v: fmtRs(k.totalCommittedValue), hint:'sum of latest agreement/revised values', fn:()=>openTcAgListDrawer('value')},
+    {l:'Expiring Soon', v:k.expiringSoonCount, hint:'within 90 days', fn:()=>openTcAgListDrawer('Expiring Soon')},
+    {l:'Expired', v:k.expiredCount, hint:'past currency date', fn:()=>openTcAgListDrawer('Expired')},
+    {l:'New AMC & Works Proposals', v:k.proposalsInPipeline, hint:'click for the status of each proposal', fn:()=>openTcProposalListDrawer()},
+    {l:'Tenders Under Finalization', v:k.tendersUnderFinalization, hint:'in the TC/TAA pipeline', fn:()=>openTcTenderListDrawer()},
   ];
   if (k.currentFyLabel){
-    kpis.push({l:`LOAs Issued (${esc(k.currentFyLabel)})`, v:k.loaIssuedCurrentFy, hint: fmtRs(k.loaIssuedCurrentFyValue)+' committed this FY', fn:()=>tcScrollTo('tcLoaList')});
+    kpis.push({l:`LOAs Issued (${esc(k.currentFyLabel)})`, v:k.loaIssuedCurrentFy, hint: fmtRs(k.loaIssuedCurrentFyValue)+' committed this FY', fn:()=>openTcLoaListDrawer(k.currentFyLabel)});
   }
   row.innerHTML = kpis.map(x=>`<div class="kpi"><div class="lbl">${esc(x.l)}</div><div class="val">${x.v}</div><div class="hint">${x.hint||''}</div></div>`).join('');
   Array.from(row.querySelectorAll('.kpi')).forEach((el,i)=>{ if (kpis[i].fn) el.addEventListener('click', kpis[i].fn); });
@@ -7722,12 +7648,12 @@ function setupTcAgreementList(){
   draw();
 }
 
-function openTcAgreementDrawer(sno){
+function openTcAgreementDrawer(sno, back){
   const tc = DATA.tendersContracts;
   if (!tc) return;
   const a = tc.agreements.find(x=>x.sno===sno);
   if (!a) return;
-  let html = statRow([
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Contract Type', v: esc(a.contractType||'—')},
     {l:'Status', v: `<span class="pill ${tcExpiryClass(a.expiryStatus)}">${esc(a.expiryStatus)}</span>`},
     {l:'Effective Value', v: fmtRs(a.effectiveValue)},
@@ -7740,7 +7666,7 @@ function openTcAgreementDrawer(sno){
     <div class="drawer-row"><div class="t1">Firm</div><div class="t2">${esc(a.firmName||'—')}</div></div>
     <div class="drawer-row"><div class="t1">Date of Issue of LOA</div><div class="t2">${esc(a.dateOfIssueOfLoa||'—')}</div></div>
   `);
-  html += dcard('Value &amp; Currency', null, statRow([
+  html += dcard('Value & Currency', null, statRow([
     {l:'Agreement Amount', v: fmtRs(a.agreementAmount)},
     {l:'Revised Value', v: a.revisedAgreementValue!=null? fmtRs(a.revisedAgreementValue):'—'},
     {l:'Original Currency Date', v: esc(a.originalCurrencyDate||'—')},
@@ -7760,7 +7686,7 @@ function openTcAgreementDrawer(sno){
   }
   const contacts = tcContactsForBrands(a.brandIds);
   if (contacts.length){
-    html += dcard('Who to Contact for this AMC', 'linked by OEM/brand from the Contact Person sheet', contacts.map(tcContactCardHtml).join(''));
+    html += dcard('Who to Contact', 'from the Contact Person sheet, matched to this firm/OEM &bull; tap a number to call', contacts.map(tcContactCardHtml).join(''));
   }
   if ((a.renewalProposals||[]).length){
     html += dcard('Renewal Already in Pipeline', 'matched by OEM/brand against current AMC &amp; Works proposals', a.renewalProposals.map(p=>
@@ -7849,7 +7775,7 @@ const TC_PROPOSAL_STAGES = [
   {key:'sanction', label:'Sanction Obtained'},
   {key:'tender_prep', label:'Tender Document Under Preparation'},
 ];
-function tcStepperHtml(p){
+function tcStepperHtml(p, back){
   const idx = TC_PROPOSAL_STAGES.findIndex(s=>s.key===p.stageKey);
   const n = TC_PROPOSAL_STAGES.length;
   const segs = TC_PROPOSAL_STAGES.map((s,i)=>{
@@ -7857,11 +7783,11 @@ function tcStepperHtml(p){
     return `<div class="tc-stepper-seg ${cls}"></div>`;
   }).join('');
   const id = 'tcst'+Math.random().toString(36).slice(2,9);
-  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openTcProposalDrawer(p.section,p.sno)); }, 0);
+  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openTcProposalDrawer(p.section,p.sno,back)); }, 0);
   return `<div class="tc-stepper-card" id="${id}">
-    <div class="tc-stepper-top"><div class="tc-stepper-title">${esc(p.description||('Proposal #'+p.sno))}</div><div class="tc-stepper-val">${esc(p.value||'')}</div></div>
+    <div class="tc-stepper-top"><div class="tc-stepper-title">${esc(p.description||('Proposal #'+p.sno))}</div><div class="tc-stepper-val">${p.valueNum!=null ? fmtRs(p.valueNum) : esc(p.value||'')}</div></div>
     <div class="tc-stepper-track">${segs}</div>
-    <div class="tc-stepper-current-lbl">Step ${idx>=0?idx+1:'?'} of ${n}: ${esc(p.stageLabel||'Unclassified')}</div>
+    <div class="tc-stepper-current-lbl">${idx>=0?`Step ${idx+1} of ${n}: `:''}${esc(p.stageLabel||'Unclassified')}</div>
   </div>`;
 }
 function renderTcProposalList(sectionFilter){
@@ -7889,15 +7815,15 @@ function setupTcProposalToggle(){
   });
   renderTcProposalList(null);
 }
-function openTcProposalDrawer(section, sno){
+function openTcProposalDrawer(section, sno, back){
   const tc = DATA.tendersContracts;
   if (!tc) return;
   const p = tc.proposals.find(x=>x.section===section && x.sno===sno);
   if (!p) return;
-  let html = statRow([
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Section', v: esc(p.section)},
     {l:'Stage', v: esc(p.stageLabel||'—')},
-    {l:'Value', v: esc(p.value||'—')},
+    {l:'Value', v: p.valueNum!=null ? fmtRs(p.valueNum) : esc(p.value||'—')},
     {l:'Items', v: esc(p.items!=null? String(p.items):'—')},
   ]);
   html += dcard('Description', null, `<div class="dcap" style="margin-top:0; white-space:normal;">${esc(p.description||'—')}</div>`);
@@ -7953,19 +7879,19 @@ function renderTcKanban(){
     `<div class="tc-kanban-col"><div class="tc-kanban-colhead"><span>${esc(col.label)}</span><span class="cnt">${col.items.length}</span></div>${col.items.length? col.items.map(tcKanbanCardHtml).join('') : '<div class="tc-kanban-empty">None</div>'}</div>`
   ).join('');
 }
-function openTcTenderDrawer(sno){
+function openTcTenderDrawer(sno, back){
   const tc = DATA.tendersContracts;
   if (!tc) return;
   const t = tc.tenders.find(x=>x.sno===sno);
   if (!t) return;
-  let html = statRow([
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Stage', v: esc(t.stageLabel||'—')},
     {l:'Value', v: esc(t.value||'—')},
     {l:'Date Floated', v: esc(t.dateFloated||'—')},
     {l:'Date Opening', v: esc(t.dateOpening||'—')},
   ]);
   html += dcard('Description', null, `<div class="dcap" style="margin-top:0; white-space:normal;">${esc(t.description||'—')}${t.items?` &bull; ${esc(t.items)}`:''}</div>`);
-  html += dcard('Tender Committee &amp; Accepting Authority', null, statRow([
+  html += dcard('Tender Committee & Accepting Authority', null, statRow([
     {l:'TC Executive', v: esc(t.tcExecutive||'—')},
     {l:'TC Finance', v: esc(t.tcFinance||'—')},
     {l:'TC Sister', v: esc(t.tcSister||'—')},
@@ -8022,18 +7948,18 @@ function setupTcLoaToggle(){
   });
   renderTcLoaList(null);
 }
-function openTcLoaDrawer(fy, sno){
+function openTcLoaDrawer(fy, sno, back){
   const tc = DATA.tendersContracts;
   if (!tc) return;
   const l = tc.loas.find(x=>x.fy===fy && x.sno===sno);
   if (!l) return;
-  let html = statRow([
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Financial Year', v: esc(l.fy)},
     {l:'Value', v: fmtRs(l.valueNum)},
     {l:'LOA Issued On', v: esc(l.loaIssuedOn||'—')},
     {l:'Status', v: esc(l.statusLabel||'—')},
   ]);
-  html += dcard('Tender Committee &amp; Accepting Authority', null, statRow([
+  html += dcard('Tender Committee & Accepting Authority', null, statRow([
     {l:'TC Executive', v: esc(l.tcExecutive||'—')},
     {l:'TC Finance', v: esc(l.tcFinance||'—')},
     {l:'TC Sister', v: esc(l.tcSister||'—')},
@@ -8073,13 +7999,111 @@ function openTcSourceDrawer(){
   });
 }
 
+// ---------------------------------------------------------------------
+// KPI-tile drawers (27-Nov-2026, per Shruti): the Agreement Register,
+// Contact Directory, Proposal list, Tender board and LOA list cards were
+// removed from the tab; each now opens from its KPI tile as a drawer, and
+// every row inside opens its own detail drawer (with a Back link).
+// ---------------------------------------------------------------------
+function tcAgDaysText(a){
+  if (a.daysToExpiry==null) return esc(a.expiryStatus||'—');
+  if (a.daysToExpiry<0) return `${Math.abs(a.daysToExpiry)} days overdue`;
+  return `${a.daysToExpiry} days left`;
+}
+function tcAgRow(a, back){
+  const renew = (a.renewalProposals||[]).length ? ' &bull; <span style="color:var(--good)">renewal in pipeline</span>' : '';
+  return breakRow(a.firmName||'Agreement',
+    `${esc(a.contractType||'')} &bull; ${esc((a.nameOfWork||'').slice(0,80))}<br>${fmtRs(a.effectiveValue)} &bull; currency ${esc(a.effectiveCurrencyDate||'—')}${renew}`,
+    `<span class="pill ${tcExpiryClass(a.expiryStatus)}">${tcAgDaysText(a)}</span>`, null, ()=>openTcAgreementDrawer(a.sno, back));
+}
+function openTcAgListDrawer(mode){
+  const tc = DATA.tendersContracts;
+  if (!tc) return;
+  const k = tc.kpi;
+  const back = {label: mode==='value' ? 'Back to Committed Value' : (mode==='all' ? 'Back to Total Agreements' : 'Back to '+mode), fn: ()=>openTcAgListDrawer(mode)};
+  const byExpiry = (a,b)=> (a.daysToExpiry??99999)-(b.daysToExpiry??99999);
+  const byValue = (a,b)=> (b.effectiveValue||0)-(a.effectiveValue||0);
+  const types = [...new Set(tc.agreements.map(a=>a.contractType||'Other'))];
+  const sumOf = rows => rows.reduce((s,a)=>s+(a.effectiveValue||0),0);
+  let html = '', title = '', cap = '';
+  if (mode==='all' || mode==='value'){
+    const sorter = mode==='value' ? byValue : byExpiry;
+    html += statRow(mode==='value'
+      ? [{l:'Committed Value', v: fmtRs(k.totalCommittedValue)}].concat(types.map(t=>({l:t, v: fmtRs(sumOf(tc.agreements.filter(a=>(a.contractType||'Other')===t)))})))
+      : [{l:'Total', v:k.totalAgreements}, {l:'Valid', v: tc.agreements.filter(a=>a.expiryStatus==='Valid').length}, {l:'Expiring Soon', v:k.expiringSoonCount}, {l:'Expired', v:k.expiredCount}]);
+    types.forEach(t=>{
+      const rows = tc.agreements.filter(a=>(a.contractType||'Other')===t).sort(sorter);
+      html += dcard(`${t} (${rows.length})`, `${fmtRs(sumOf(rows))} &bull; ${mode==='value'?'highest value first':'soonest expiry first'} &bull; click an agreement for full detail and who to contact`, rows.map(a=>tcAgRow(a, back)).join(''));
+    });
+    title = mode==='value' ? 'Committed Value' : 'Total Agreements';
+    cap = `${k.totalAgreements} agreement(s) &bull; ${fmtRs(k.totalCommittedValue)} &bull; as of ${esc(tc.asOf)}`;
+  } else {
+    const rows = tc.agreements.filter(a=>a.expiryStatus===mode).sort(byExpiry);
+    html += statRow([{l:'Agreements', v: rows.length}, {l:'Value', v: fmtRs(sumOf(rows))}, {l:'Renewal in Pipeline', v: rows.filter(a=>(a.renewalProposals||[]).length).length}]);
+    html += rows.length ? rows.map(a=>tcAgRow(a, back)).join('') : '<div class="emptynote" style="padding:24px 0;">None right now.</div>';
+    title = mode==='Expired' ? 'Expired Agreements' : 'Agreements Expiring Within 90 Days';
+    cap = `${rows.length} agreement(s) &bull; click one for full detail and who to contact &bull; as of ${esc(tc.asOf)}`;
+  }
+  openDrawer(title, cap, html);
+}
+function openTcProposalListDrawer(sectionIdx){
+  const tc = DATA.tendersContracts;
+  if (!tc) return;
+  const sections = [...new Set(tc.proposals.map(p=>p.section))];
+  const opts = ['All', ...sections];
+  const i = sectionIdx||0;
+  const items = i===0 ? tc.proposals : tc.proposals.filter(p=>p.section===opts[i]);
+  const counts = {};
+  tc.proposals.forEach(p=>{ counts[p.stageLabel] = (counts[p.stageLabel]||0)+1; });
+  const navId = 'tcPropNav'+Math.random().toString(36).slice(2,7);
+  const html = statRow([{l:'Proposals', v: tc.proposals.length}].concat(sections.map(s=>({l:s, v: tc.proposals.filter(p=>p.section===s).length})))) +
+    subNavHtml(navId, opts, i) +
+    (items.map(p=>tcStepperHtml(p, {label:'Back to New AMC & Works Proposals', fn:()=>openTcProposalListDrawer(i)})).join('') || '<div class="emptynote">No proposals in this category.</div>');
+  openDrawer('Status of New AMC & Works Proposals', `${tc.proposals.length} proposal(s) &bull; where each one sits in the approval chain &bull; click a proposal for its full remark`, html);
+  wireSubNav(navId, j=>openTcProposalListDrawer(j));
+}
+function openTcTenderListDrawer(){
+  const tc = DATA.tendersContracts;
+  if (!tc) return;
+  const back = {label:'Back to Tenders Under Finalization', fn: openTcTenderListDrawer};
+  const groups = [];
+  [...tc.tenders].sort((a,b)=> (b.stageOrder||0)-(a.stageOrder||0)).forEach(t=>{
+    let g = groups.find(x=>x.key===t.stageKey && (t.stageKey!=='unclassified' || x.label===t.stageLabel));
+    if (t.stageKey==='unclassified') g = groups.find(x=>x.key==='unclassified');
+    if (!g){ g = {key:t.stageKey, label: t.stageKey==='unclassified' ? 'Other (status from remarks)' : t.stageLabel, items:[]}; groups.push(g); }
+    g.items.push(t);
+  });
+  const html = statRow([{l:'Tenders', v: tc.tenders.length}, {l:'Stages', v: groups.length}]) +
+    groups.map(g=> dcard(`${g.label} (${g.items.length})`, null, g.items.map(t=> breakRow(
+      (t.description||('Tender S.No '+t.sno)).slice(0,90),
+      `${esc(t.worksOrAmc||'')} &bull; ${esc(t.value||'—')} &bull; with ${esc(t.currentHolder||'—')}`,
+      esc(tcDaysLabel(t.daysSinceLastUpdate)||''), null, ()=>openTcTenderDrawer(t.sno, back))).join(''))).join('');
+  openDrawer('Tenders Under Finalization', `${tc.tenders.length} tender(s) &bull; grouped by stage &bull; click a tender for remarks, who it's with, and TC/TAA &bull; as of ${esc(tc.asOf)}`, html);
+}
+function openTcLoaListDrawer(fy){
+  const tc = DATA.tendersContracts;
+  if (!tc) return;
+  const fys = [...new Set(tc.loas.map(l=>l.fy))];
+  const opts = [...fys, 'All'];
+  const i = Math.max(0, opts.indexOf(fy||fys[0]));
+  const items = opts[i]==='All' ? tc.loas : tc.loas.filter(l=>l.fy===opts[i]);
+  const back = {label:'Back to LOAs Issued', fn:()=>openTcLoaListDrawer(opts[i])};
+  const fin = items.filter(l=>l.statusKey==='finalized').length;
+  const navId = 'tcLoaNav'+Math.random().toString(36).slice(2,7);
+  const html = statRow([{l:'LOAs', v: items.length}, {l:'Value', v: fmtRs(items.reduce((s,l)=>s+(l.valueNum||0),0))}, {l:'Agreement Finalized', v: fin}, {l:'Still in Process', v: items.length-fin}]) +
+    subNavHtml(navId, opts, i) +
+    (items.map(l=> breakRow(`${l.worksOrAmc||''} • ${(l.description||'').slice(0,80)}`,
+      `${esc(l.fy)} &bull; LOA issued ${esc(l.loaIssuedOn||'—')} &bull; ${fmtRs(l.valueNum)}`,
+      `<span class="pill ${l.statusKey==='finalized'?'good':(l.statusKey==='pg_awaited'?'bad':'warn')}">${esc((l.statusLabel||'—').slice(0,40))}</span>`,
+      null, ()=>openTcLoaDrawer(l.fy, l.sno, back))).join('') || '<div class="emptynote">No LOAs in this period.</div>');
+  openDrawer('LOAs Issued by Tender Section', `${items.length} LOA(s) &bull; click one for the agreement-finalization trail`, html);
+  wireSubNav(navId, j=>openTcLoaListDrawer(opts[j]));
+}
+
 function drawTcCharts(){
   renderTcNote();
   renderTcKpis();
-  renderTcAttention();
   renderTcRunway();
-  const tcSrcBtn = document.getElementById('tcSourceBtn');
-  if (tcSrcBtn && !tcSrcBtn._wired){ tcSrcBtn._wired = true; tcSrcBtn.addEventListener('click', openTcSourceDrawer); }
 }
 
 // =====================================================================
@@ -9458,8 +9482,6 @@ function renderTabBadges(){
       infraCount += (sid['Sanctioned']||0)+(sid['Proposed']||0)+(rh['Sanctioned']||0)+(rh['Proposed']||0);
     });
   }
-  const tc = DATA.tendersContracts;
-  const tcCount = tc ? (tc.attention||[]).length : 0;
   const ip = DATA.indentPosition;
   const ipCount = ip ? (ip.attention||[]).length : 0;
   const excCount = (DATA.exceptions.latest||[]).length;
@@ -9471,7 +9493,6 @@ function renderTabBadges(){
     actionplan53: {n: apCount},
     fleet: {n: overdueCount},
     infra: {n: infraCount},
-    tenders: {n: tcCount},
   };
   Object.keys(counts).forEach(mod=>{
     const btn = nav.querySelector(`button[data-mod="${mod}"]`);
@@ -9523,12 +9544,7 @@ safe('setupExceptionsTable', setupExceptionsTable);
 safe('setupInfraStationTable', setupInfraStationTable);
 safe('setupUcTable', setupUcTable);
 safe('setupSancTable', setupSancTable);
-safe('setupTcAgreementList', setupTcAgreementList);
-safe('setupTcContactSearch', setupTcContactSearch);
 safe('setupIpSafetySearch', setupIpSafetySearch);
-safe('setupTcProposalToggle', setupTcProposalToggle);
-safe('setupTcLoaToggle', setupTcLoaToggle);
-safe('renderTcKanban', renderTcKanban);
 safe('tabBadges', renderTabBadges);
 safe('tabFades', updateTabFades);
 redrawCurrent();
@@ -11008,7 +11024,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
     if (infra && (infra.srdenTable||[]).length){
       infra.srdenTable.forEach(row=>{ const sid=row.sidingStatus||{}, rh=row.rhStatus||{}; infraCount += (sid['Sanctioned']||0)+(sid['Proposed']||0)+(rh['Sanctioned']||0)+(rh['Proposed']||0); });
     }
-    const tc = DATA.tendersContracts; const tcCount = tc ? (tc.attention||[]).length : 0;
+    const tc = DATA.tendersContracts; const tcCount = tc && tc.kpi ? (tc.kpi.expiredCount||0)+(tc.kpi.expiringSoonCount||0) : 0;
     const ip = DATA.indentPosition; const ipCount = ip ? (ip.stageOrder||[]).reduce((s,k)=>s+((ip.stages[k]||{}).indentCount||0),0) : 0;
     return {active, underComm, deputed, overallPct, excOpen, shortfallCount, dsCount, apCount, overdueCount, infraCount, tcCount, ipCount};
   }
@@ -11025,7 +11041,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
     {kw:['double shift','double-shift','fatigue'], ans:c=>`${c.dsCount} shift record(s) over 12 hours are on record.`},
     {kw:['action plan','53 point','53-point','stalled'], ans:c=>`${c.apCount} item(s) on the 53-Point Action Plan need attention (stalled or flagged nil).`},
     {kw:['infra','siding','rest house'], ans:c=>`${c.infraCount} infrastructure item(s) (sidings/rest houses) are pending.`},
-    {kw:['tender','contract'], ans:c=>`${c.tcCount} tender/contract item(s) need attention.`},
+    {kw:['tender','contract'], ans:c=>`${c.tcCount} agreement(s) expired or expiring within 90 days \u2014 open the Tenders & Contracts tab and click Expired / Expiring Soon.`},
     {kw:['indent'], ans:c=>`${c.ipCount} indent(s) in the procurement pipeline \u2014 open the Indent Position tab for the stage-wise list.`},
     {kw:['as of','updated','date','period covered'], ans:c=>`Data is as of ${DATA.meta.asOf} (period covered: ${DATA.meta.periodCovered||'—'}).`},
   ];
@@ -11099,7 +11115,7 @@ window.NM = { closeDrawer, initMap, setData: function(d){
     lines.push(`Open exceptions: ${c.excOpen}. IOH/POH overdue: ${c.overdueCount}.`);
     lines.push(`Sr.DEN jurisdictions flagged for shortfall: ${c.shortfallCount}. Shifts over 12h: ${c.dsCount}.`);
     lines.push(`53-Point Action Plan items needing attention: ${c.apCount}. Infra items pending: ${c.infraCount}.`);
-    lines.push(`Tenders/contracts needing attention: ${c.tcCount}. Indents in pipeline: ${c.ipCount}.`);
+    lines.push(`Agreements expired or expiring soon: ${c.tcCount}. Indents in pipeline: ${c.ipCount}.`);
     try{
       const today = Object.assign({asOf: DATA.meta.asOf}, c);
       const prevRaw = localStorage.getItem('samarthDailySnapshot');
