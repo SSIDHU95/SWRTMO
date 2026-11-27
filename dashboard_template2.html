@@ -120,24 +120,42 @@
      stay within header.top so the whole masthead is one sticky unit. ---- */
   header.top{
     position:sticky; top:env(safe-area-inset-top,0px); z-index:50;
-    padding-top:env(safe-area-inset-top,0px); color:#fff;
+    padding-top:env(safe-area-inset-top,0px); color:#fff; background:var(--navy);
   }
-  .hdr-tier1{
-    background:var(--navy);
-    padding:20px 24px; display:flex; align-items:center;
+  /* 27-Nov-2026 (per Shruti): one navy bar -- last refreshed (left), SAMARTH
+     centred, account menu (right). The old grey second strip is removed.
+     nav.tabs sticks under this header via --hdr-h, measured by a small
+     script right after the header instead of a hard-coded height. */
+  .hdr-bar{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px; padding:14px 32px; min-height:72px;}
+  .hdr-left{justify-self:start; min-width:0;}
+  .hdr-right{justify-self:end; min-width:0;}
+  .brand{display:flex; flex-direction:column; align-items:center; text-align:center;}
+  .brand h1{font-size:23px; font-weight:700; letter-spacing:.01em; line-height:1.2; display:flex; align-items:baseline; gap:10px; font-family:var(--sans); margin:0;}
+  .brand h1 .hindi{font-family:'Noto Sans','Noto Sans Devanagari',sans-serif; font-size:15px; font-weight:600; color:var(--target); letter-spacing:0;}
+  .brand .sub{font-size:12.5px; color:#CBD5E1; font-family:var(--sans); font-weight:500; line-height:1.5; margin-top:2px;}
+  .asof{font-size:12px; color:#AEB8CC; font-family:var(--sans); font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .usermenu{position:relative;}
+  .um-btn{display:flex; align-items:center; gap:8px; max-width:280px; height:36px; padding:0 10px 0 4px; border:1px solid rgba(255,255,255,.18); border-radius:6px;
+    background:transparent; color:#E5E9F2; font-family:var(--sans); font-size:12.5px; font-weight:500; cursor:pointer;}
+  .um-btn:hover{background:rgba(255,255,255,.06);}
+  .um-btn:focus-visible{outline:2px solid var(--target); outline-offset:2px;}
+  .um-avatar{width:28px; height:28px; border-radius:4px; background:var(--target); color:#111827; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; flex:none;}
+  .um-email{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .um-chev{flex:none; opacity:.7;}
+  .um-pop{position:absolute; right:0; top:calc(100% + 6px); min-width:240px; background:var(--surface); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; box-shadow:0 8px 24px rgba(17,24,39,.18); padding:6px 0; z-index:300; text-align:left;}
+  .um-pop[hidden]{display:none;}
+  .um-head{padding:8px 14px 10px; border-bottom:1px solid var(--border); margin-bottom:4px; font-size:12px; color:var(--muted);}
+  .um-head b{display:block; color:var(--text); font-size:13px; font-weight:600; word-break:break-all;}
+  .um-pop button{display:block; width:100%; text-align:left; padding:9px 14px; border:none; background:none; font-family:var(--sans); font-size:13.5px; color:var(--text); cursor:pointer;}
+  .um-pop button:hover, .um-pop button:focus-visible{background:var(--surface-2); outline:none;}
+  .um-pop button.danger{color:var(--bad);}
+  @media (max-width:760px){
+    .hdr-bar{grid-template-columns:1fr auto; grid-template-areas:"brand brand" "left right"; padding:12px 16px; gap:8px 12px; min-height:0;}
+    .brand{grid-area:brand;} .hdr-left{grid-area:left; align-self:center;} .hdr-right{grid-area:right;}
+    .brand h1{font-size:21px;} .brand .sub{font-size:11.5px;}
+    .um-email{display:none;}
   }
-  .brand{display:flex; align-items:center; gap:14px;}
-  .brand .accentbar{width:4px; align-self:stretch; min-height:38px; border-radius:3px; flex:none; background:var(--target);}
-  .brand h1{font-size:23px; font-weight:800; letter-spacing:.01em; line-height:1.2; display:flex; align-items:baseline; gap:10px; font-family:var(--sans);}
-  .brand h1 .hindi{font-size:15px; font-weight:600; color:var(--target); letter-spacing:0;}
-  .brand .sub{font-size:12.5px; color:#CBD5E1; font-family:var(--sans); font-weight:500; line-height:1.5; margin-top:4px;}
-
-  .hdr-tier2{
-    background:color-mix(in srgb, var(--navy) 85%, white 15%);
-    border-top:1px solid rgba(255,255,255,.08); border-bottom:1px solid rgba(255,255,255,.08);
-    padding:9px 22px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:space-between;
-  }
-  .asof{font-size:11.5px; color:#A8B4CC; font-family:var(--mono); font-weight:500; letter-spacing:.01em;}
 
   /* ---- tab nav: segmented pill bar with scroll-fade affordances
      (Principal-designer pass, 13-Oct-2026) -- CSS/typography + a small,
@@ -148,7 +166,7 @@
      never replacing a button's own label text, so the existing
      e.target.closest('button') click delegation is unaffected. ---- */
   nav.tabs{
-    position:sticky; top:calc(125px + env(safe-area-inset-top,0px)); z-index:40;
+    position:sticky; top:calc(var(--hdr-h, 77px) + env(safe-area-inset-top,0px)); z-index:40;
     background:var(--surface-2); border-bottom:1px solid var(--border);
     display:flex; align-items:center; gap:6px; overflow-x:auto; padding:8px 14px;
     scroll-snap-type:x mandatory; scroll-behavior:smooth; scroll-padding-inline:14px;
@@ -1602,19 +1620,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 
 <header class="top">
-  <div class="hdr-tier1">
+  <div class="hdr-bar">
+    <div class="hdr-left"><span class="asof" id="asofLabel">as of &mdash;</span></div>
     <div class="brand">
-      <div class="accentbar"></div>
-      <div>
-        <h1>SAMARTH <span class="hindi">(&#2360;&#2350;&#2352;&#2381;&#2341;)</span></h1>
-        <div class="sub">South Western Automated Monitoring, Alerting &amp; Real-Time Track-Machine Hub</div>
-      </div>
+      <h1>SAMARTH <span class="hindi" lang="hi">(&#2360;&#2350;&#2352;&#2381;&#2341;)</span></h1>
+      <div class="sub">South Western Automated Monitoring, Alerting &amp; Real-Time Track-Machine Hub</div>
     </div>
-  </div>
-  <div class="hdr-tier2">
-    <span class="asof" id="asofLabel">as of &mdash;</span>
+    <div class="hdr-right"></div>
   </div>
 </header>
+<script>
+/* header height -> --hdr-h so the tab bar always sits flush under the header */
+(function(){ const h=document.querySelector('header.top'); if(!h) return;
+  const set=()=>{ if(h.offsetHeight) document.documentElement.style.setProperty('--hdr-h', h.offsetHeight+'px'); };
+  if (window.ResizeObserver) new ResizeObserver(set).observe(h); window.addEventListener('resize', set); set(); })();
+</script>
 
 <nav class="tabs" id="tabNav">
   <button data-mod="overview" class="active">Overview</button>
