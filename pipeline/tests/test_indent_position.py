@@ -56,3 +56,54 @@ class TestSummaryTotals(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDaysInStatus(unittest.TestCase):
+    """27-Nov-2026: "days since current status" is worked out from each
+    stage's status-start date (like the sheet's own TODAY()-date formula),
+    falling back to the sheet's number -- decoded when the sheet formats a
+    day count as a date -- only when there is no usable date."""
+    AS_OF = __import__('datetime').date(2026, 11, 27)
+
+    def _stage(self, key, row):
+        return {key: {'rows': [row]}}
+
+    def test_computed_from_status_date(self):
+        st = self._stage('indentSigning', {'sno': 1, 'sentToCurrentHolderOn': '25.11.2026',
+                                          'sentToCurrentHolderOnIso': '2026-11-25', 'daysPending': 0})
+        ip.add_days_in_status(st, self.AS_OF)
+        self.assertEqual(st['indentSigning']['rows'][0]['daysInStatus'], 2)
+
+    def test_date_formatted_day_count_is_decoded(self):
+        st = self._stage('poIssuedPendingReceipt', {'sno': 1, 'poDate': None, 'poDateIso': None, 'daysSincePo': '17.07.1900'})
+        ip.add_days_in_status(st, self.AS_OF)
+        self.assertEqual(st['poIssuedPendingReceipt']['rows'][0]['daysInStatus'], 199)
+
+    def test_two_dates_in_one_cell_uses_the_first(self):
+        st = self._stage('poIssuedPendingReceipt', {'sno': 11, 'poDate': '08/10/26 23/10/26', 'poDateIso': None})
+        ip.add_days_in_status(st, self.AS_OF)
+        self.assertEqual(st['poIssuedPendingReceipt']['rows'][0]['daysInStatus'], 50)
+
+    def test_tender_not_yet_opened_gets_a_note_not_zero(self):
+        st = self._stage('tenderUnderFinalisation', {'sno': 4, 'tenderOpeningDate': '30.11.2026',
+                                                    'tenderOpeningDateIso': '2026-11-30', 'daysPendingSinceOpening': 0})
+        ip.add_days_in_status(st, self.AS_OF)
+        r = st['tenderUnderFinalisation']['rows'][0]
+        self.assertIsNone(r['daysInStatus'])
+        self.assertEqual(r['daysNote'], 'opens 30.11.2026')
+
+    def test_future_typo_date_falls_back_to_sheet_value(self):
+        st = self._stage('underVetting', {'sno': 1, 'sentOn': '17.11.2027', 'sentOnIso': '2027-11-17', 'daysPending': 9})
+        ip.add_days_in_status(st, self.AS_OF)
+        self.assertEqual(st['underVetting']['rows'][0]['daysInStatus'], 9)
+
+
+class TestHeaderAlternates(unittest.TestCase):
+    def test_renamed_po_date_header_is_still_read(self):
+        rows = ip._build_rows([{'Sl. No.': 1, 'PO/modified PO Date': '12.05.2026'}],
+                              ip.INDENT_STAGE_COLUMNS['poIssuedPendingReceipt'])
+        self.assertEqual(rows[0]['poDateIso'], '2026-05-12')
+
+    def test_case_and_spacing_differences_are_tolerated(self):
+        rows = ip._build_rows([{'Sl. No.': 1, 'REMARKS': 'x'}], ip.INDENT_STAGE_COLUMNS['underVetting'])
+        self.assertEqual(rows[0]['remarks'], 'x')
