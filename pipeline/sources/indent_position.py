@@ -83,8 +83,9 @@ INDENT_STAGE_COLUMNS = {
         ('noOfItems', 'No. of Items for which tender to be published', 'num'),
         ('qtyRequired', 'Quantity Req', 'raw'), ('indentValue', 'Indent Value', 'money'),
         ('indentNo', 'Indent No', 'text'), ('sentToPurchaseUnit', 'Sent to Purchase unit', 'date'),
-        ('durationInCurrentStatus', 'Duration in Current Status', 'num'),
+        ('durationInCurrentStatus', ('Duration in Current Status', 'Duration from Current Status', 'Days since current status'), 'raw'),
         ('purchaseUnit', 'Purchase Unit', 'text'), ('remarks', 'Remarks', 'text'),
+        ('machines', ('Machines', 'Machine'), 'text'),
     ],
     'tenderUnderFinalisation': [
         ('sno', 'Sl. No.', 'int'), ('description', 'Description of Items', 'text'),
@@ -94,14 +95,20 @@ INDENT_STAGE_COLUMNS = {
         ('likelySupplier', 'Likely Supplier', 'text'), ('tenderNo', 'Tender No', 'raw'),
         ('tenderPublishedDate', 'Tender Published Date', 'date'),
         ('tenderOpeningDate', 'Tender Opening Date', 'date'),
-        ('daysPendingSinceOpening', 'Days pending since opening', 'num'),
+        ('daysPendingSinceOpening', 'Days pending since opening', 'raw'),
+        ('purchaseUnit', 'Purchase Unit', 'text'), ('remarks', 'Remarks', 'text'),
+        ('machines', ('Machines', 'Machine'), 'text'),
     ],
     'poIssuedPendingReceipt': [
         ('sno', 'Sl. No.', 'int'), ('description', 'Description of Items', 'text'),
         ('demandRaisedDate', 'Demand raised date', 'date'), ('indentDate', 'Indent date', 'text'),
         ('noOfItems', 'No. of Items in Indent', 'num'), ('itemCategory', 'Item Category', 'text'),
         ('qtyRequired', 'Quantity Required', 'raw'), ('purchaseUnit', 'Purchase Unit', 'text'),
-        ('poNumber', 'PO Number', 'raw'), ('poDate', 'PO/modification Date', 'date'),
+        ('poNumber', 'PO Number', 'raw'), ('poDate', ('PO/modification Date', 'PO/modified PO Date', 'PO Date'), 'date'),
+        ('poValue', ('PO VALUE', 'PO Value'), 'money'),
+        ('daysSincePo', ('Days Passed since PO issued', 'Days passed since PO issue'), 'raw'),
+        ('deliveryDateQty', ('Deilvery date/quantity', 'Delivery date/quantity'), 'text'),
+        ('machines', ('Machines', 'Machine'), 'text'), ('remarks', 'Remarks', 'text'),
         ('firmNameLocation', 'Firm Name with Location & Contact', 'text'),
         ('firmContact', 'Firm Contact Details With Name and No.', 'text'),
         ('dueDeliveryDate', 'Due Delivery date', 'date'),
@@ -118,8 +125,9 @@ INDENT_STAGE_COLUMNS = {
         ('purchaseUnit', 'Purchase Unit', 'text'), ('indentNo', 'Indent No', 'text'),
         ('indentValue', 'Indent Value', 'money'), ('indentDate', 'Indent Date', 'date'),
         ('sentOn', 'Sent for Vetting On', 'date'),
-        ('daysPending', 'Days for which Pending under vetting', 'num'),
+        ('daysPending', 'Days for which Pending under vetting', 'raw'),
         ('tdc', 'TDC for completion of vetting', 'text'),
+        ('machines', ('Machine name', 'Machine', 'Machines'), 'text'), ('remarks', 'Remarks', 'text'),
     ],
     'underConcurrence': [
         ('sno', 'Sl. No.', 'int'), ('description', 'Description of Items', 'text'),
@@ -127,8 +135,9 @@ INDENT_STAGE_COLUMNS = {
         ('purchaseUnit', 'Purchase Unit', 'text'), ('indentNo', 'Indent No', 'text'),
         ('indentDate', 'Indent Date', 'date'), ('indentValue', 'Indent Value', 'money'),
         ('sentOn', 'Sent for Concurrence On', 'date'),
-        ('daysPending', 'Days for which Pending under concurrence', 'num'),
+        ('daysPending', 'Days for which Pending under concurrence', 'raw'),
         ('tdc', 'TDC for completion of concurrence', 'text'), ('remarks', 'Remarks', 'text'),
+        ('machines', ('Machine', 'Machines', 'Machine name'), 'text'),
     ],
     'indentSigning': [
         ('sno', 'Sl. No.', 'int'), ('description', 'Description of Items', 'text'),
@@ -137,8 +146,9 @@ INDENT_STAGE_COLUMNS = {
         ('indentNo', 'Indent No', 'text'), ('indentDate', 'Indent Date', 'date'),
         ('currentHolder', 'Current Holder', 'text'),
         ('sentToCurrentHolderOn', 'Sent to Current Holder on', 'date'),
-        ('daysPending', 'No of Days Passed with current holder', 'num'),
+        ('daysPending', 'No of Days Passed with current holder', 'raw'),
         ('expectedSigningDate', 'Expected Signing Date', 'raw'), ('remarks', 'Remarks', 'text'),
+        ('machines', ('Machine', 'Machines', 'Machine name'), 'text'),
     ],
     'balanceIndentsToBeProposed': [
         ('sno', 'Sl. No.', 'int'), ('description', 'Description', 'text'),
@@ -241,6 +251,10 @@ def _ip_cell(v, kind):
     return _clean_text(v)  # 'text'
 
 
+def _norm_header(h):
+    return re.sub(r'\s+', ' ', str(h or '')).strip().lower()
+
+
 def _build_rows(sheet_rows, col_map):
     """sheet_rows: the live payload's list of name-keyed row dicts for one
     sheet. col_map: one of the INDENT_STAGE_COLUMNS[...]/SAFETY_ITEMS_COLUMNS
@@ -250,8 +264,23 @@ def _build_rows(sheet_rows, col_map):
     out = []
     for raw_row in sheet_rows or []:
         row = {}
+        # header lookup tolerant of case/spacing and of the alternative
+        # wordings listed in the column map (the sheet's headers get edited
+        # from time to time -- e.g. "PO/modification Date" became "PO/modified
+        # PO Date", which silently blanked that column until 27-Nov-2026)
+        norm = {_norm_header(k): v for k, v in (raw_row or {}).items()}
         for key, header, kind in col_map:
-            v = raw_row.get(header)
+            alts = header if isinstance(header, (tuple, list)) else (header,)
+            v = None
+            for h in alts:
+                if h in raw_row:
+                    v = raw_row[h]
+                elif _norm_header(h) in norm:
+                    v = norm[_norm_header(h)]
+                else:
+                    continue
+                if v not in (None, ''):
+                    break
             if kind in ('money', 'date'):
                 row[key], row[key + ('Num' if kind == 'money' else 'Iso')] = _ip_cell(v, kind)
             else:
@@ -301,6 +330,9 @@ def extract_stages(payload):
             out[key] = dict(label=label, rows=[], indentCount=0, itemCount=0)
             continue
         rows = _build_rows(block.get("rows") or [], INDENT_STAGE_COLUMNS[key])
+        # drop the sheet's own TOTAL line (e.g. 'Main indents: 04'), which the
+        # sync sometimes passes through as a data row with no S.No/description
+        rows = [r for r in rows if r.get('sno') is not None or r.get('description')]
         indent_count, item_count = _total_counts(block.get("totalRowText"))
         if indent_count is None:
             indent_count = len(rows)
@@ -393,6 +425,99 @@ def extract_safety_items(payload):
     return _build_rows(block.get("rows") or [], SAFETY_ITEMS_COLUMNS)
 
 
+
+# ---------------------------------------------------------------------
+# "Days since current status" (added 27-Nov-2026 per Shruti: it's the key
+# figure in every stage list, sorted descending). The sheet's own day
+# columns are unreliable as delivered by the sync -- some are formatted as
+# DATES in the sheet, so "199 days" arrives as "17.07.1900"; some are typed
+# 0 or left stale; one stage's header was renamed. So, per stage, the
+# figure is worked out the same way the sheet's own TODAY()-date formulas
+# do: days from the date the indent entered its current status to the run
+# date. Only when that date is missing or unusable (blank, typo'd into the
+# future) does it fall back to the sheet's own number (decoded if it came
+# through as a 1899/1900 "date").
+# ---------------------------------------------------------------------
+_STATUS_START_FIELD = {
+    'tenderToBePublished': ('sentToPurchaseUnit', 'durationInCurrentStatus'),
+    'tenderUnderFinalisation': ('tenderOpeningDate', 'daysPendingSinceOpening'),
+    'poIssuedPendingReceipt': ('poDate', 'daysSincePo'),
+    'underVetting': ('sentOn', 'daysPending'),
+    'underConcurrence': ('sentOn', 'daysPending'),
+    'indentSigning': ('sentToCurrentHolderOn', 'daysPending'),
+}
+
+
+def _sheet_days(v):
+    """The sheet's own day count -> int, or None. Handles real numbers,
+    numeric text, and day counts that arrived formatted as dates near the
+    spreadsheet epoch ('17.07.1900' == 199 days, '31.12.1899' == 1 day)."""
+    import datetime
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return int(round(v)) if v >= 0 else None
+    t = _clean_text(v)
+    if not t:
+        return None
+    if re.fullmatch(r'\d+(\.\d+)?', t):
+        return int(round(float(t)))
+    m = re.fullmatch(r'(\d{1,2})[./-](\d{1,2})[./-](1899|1900|1901)', t)
+    if m:
+        try:
+            d = datetime.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            return (d - datetime.date(1899, 12, 30)).days
+        except ValueError:
+            return None
+    return None
+
+
+def _first_date(text):
+    import datetime
+    m = re.search(r'(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})', str(text or ''))
+    if not m:
+        return None
+    dd, mm, yy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if yy < 100:
+        yy += 2000
+    try:
+        return datetime.date(yy, mm, dd)
+    except ValueError:
+        return None
+
+
+def add_days_in_status(stages, as_of):
+    """Adds daysInStatus (int or None), statusSince (the date text used) and
+    daysNote (short text when there is no day count, e.g. a tender not yet
+    opened) to every row of the stages that have a status-start date."""
+    import datetime
+    for key, (date_field, sheet_field) in _STATUS_START_FIELD.items():
+        for r in (stages.get(key) or {}).get('rows') or []:
+            iso = r.get(date_field + 'Iso')
+            days, since, note = None, None, None
+            d = None
+            if iso:
+                try:
+                    d = datetime.date.fromisoformat(iso)
+                except ValueError:
+                    d = None
+            if d is None:
+                # a cell holding two dates (e.g. PO and modified PO:
+                # '08/10/26 23/10/26') -- the first is when this status began
+                d = _first_date(r.get(date_field))
+            if d is not None and key == 'tenderUnderFinalisation' and d > as_of:
+                note = f"opens {r.get(date_field)}"
+            elif d is not None and d <= as_of:
+                days, since = (as_of - d).days, r.get(date_field)
+            if days is None and note is None:
+                days = _sheet_days(r.get(sheet_field))
+                if days is not None and key == 'tenderUnderFinalisation' and days == 0:
+                    days = None  # 0 here means "not yet opened"
+            r['daysInStatus'] = days
+            r['statusSince'] = since
+            r['daysNote'] = note
+    return stages
+
 def extract_indent_position(payload, as_of):
     """-> {sourceFile, asOf, summary, safetyItems, stages, stageOrder,
     attention}, the same top-level shape run_pipeline.py's
@@ -404,6 +529,7 @@ def extract_indent_position(payload, as_of):
     summary = extract_summary(payload)
     safety_items = extract_safety_items(payload)
     stages = extract_stages(payload)
+    add_days_in_status(stages, as_of)
 
     import datetime
 
