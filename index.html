@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>SAMARTH</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@500;600&display=swap">
 <style>
   /* =====================================================================
      Visual system (redesigned 12-Oct-2026 per the user's request for a
@@ -1606,75 +1606,84 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 <style>
   /* =====================================================================
-     Login screen (Supabase Auth gate) -- rebranded 13-Oct-2026 to match
-     the SAMARTH identity: navy/gold header language, no SWR emblem image,
-     no DCE/TM office line, same full-bleed track-machine photo backdrop
-     and glass sign-in card as before. Reuses the dashboard's own --navy /
-     --target CSS variables so it stays in sync with the Rail Spectrum
-     theme defined above.
-     Letter-by-letter SAMARTH breakdown card + status badges added
-     13-Oct-2026 per a design idea the user shared (adapted into this
-     navy/gold system rather than the mockup's own yellow/black Tailwind
-     styling, and wired to the real sign-in flow below -- the mockup's
-     form only showed a fake "credentials received" modal, no real auth).
+     Login screen (Supabase Auth gate) -- refined 27-Nov-2026 per Shruti's
+     brief: same full-bleed track-machine photo, navy + railway-yellow,
+     but no glass card, no glowing acronym card, no "Secure Portal" badge,
+     no module strip. Left: institution + SAMARTH + full form; right: a
+     solid navy sign-in panel. The status dot at top right reflects a real
+     check of the Supabase sign-in service (see loginHealthCheck() in the
+     auth script) and is hidden until that check returns.
+     Every id the auth script uses is unchanged (loginScreen, loginForm,
+     loginEmail, loginPassword, loginSubmitBtn, loginLoading, loginError).
      ===================================================================== */
-  .login-screen{position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; background:var(--navy-2); overflow:hidden; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
-  .login-overlay{position:absolute; inset:0; z-index:1;
+  html:has(#loginScreen:not([style*="none"])), body:has(#loginScreen:not([style*="none"])){background:#020617;}
+  .login-screen{position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; min-height:100vh; min-height:100dvh;
+    background:var(--navy-2); color:#fff; overflow-x:hidden; overflow-y:auto; font-family:var(--sans); line-height:1.5;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;}
+  .login-overlay{position:absolute; inset:0; z-index:1; pointer-events:none;
     background:
-      linear-gradient(100deg, rgba(2,6,23,.95) 0%, rgba(2,6,23,.88) 26%, rgba(2,6,23,.54) 54%, rgba(2,6,23,.76) 80%, rgba(2,6,23,.93) 100%),
-      linear-gradient(0deg, rgba(2,6,23,.5) 0%, rgba(2,6,23,0) 32%);
+      linear-gradient(90deg, rgba(2,6,23,.92) 0%, rgba(2,6,23,.88) 36%, rgba(2,6,23,.52) 50%, rgba(2,6,23,.24) 62%, rgba(2,6,23,.40) 100%),
+      linear-gradient(0deg, rgba(2,6,23,.85) 0%, rgba(2,6,23,.45) 8%, rgba(2,6,23,0) 20%),
+      linear-gradient(180deg, rgba(2,6,23,.45) 0%, rgba(2,6,23,0) 14%);
   }
-  .login-brandrow{position:absolute; top:28px; left:40px; z-index:3; display:flex; align-items:center; gap:12px;}
-  .login-brandrow .lbaccent{width:4px; height:30px; border-radius:2px; background:var(--target); flex:none;}
-  .login-brandrow .lbtxt{display:flex; align-items:center; gap:9px; flex-wrap:wrap;}
-  .login-brandrow .lbtxt b{font-family:var(--sans); font-weight:800; font-size:15px; letter-spacing:.02em; color:#fff;}
-  .login-badge{font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--target); background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.35); border-radius:999px; padding:3px 9px;}
-  .login-brandrow .lbsub{display:block; font-size:10px; color:#AEB8DC; letter-spacing:.06em; text-transform:uppercase; margin-top:2px; width:100%;}
-  .login-status{position:absolute; top:26px; right:40px; z-index:3; display:flex; align-items:center; gap:7px; font-family:var(--sans); font-size:11px; color:rgba(255,255,255,.75); background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:6px 13px 6px 11px;}
-  .login-status .dot{width:7px; height:7px; border-radius:50%; background:#34D399; box-shadow:0 0 0 0 rgba(52,211,153,.6); animation:loginPulse 2s infinite;}
-  @keyframes loginPulse{
-    0%{box-shadow:0 0 0 0 rgba(52,211,153,.55);}
-    70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}
-    100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}
-  }
-  @media (max-width:640px){ .login-status{display:none;} }
-  .login-main{position:relative; z-index:2; flex:1; display:flex; align-items:center; justify-content:space-between; gap:40px; padding:84px 56px 0; flex-wrap:wrap;}
-  .login-hero{max-width:600px; padding-top:20px;}
-  .login-hero .lh-eyebrow{font-family:var(--sans); font-size:11.5px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:#AEB8DC; margin:0 0 12px;}
-  .login-hero h1{font-family:var(--serif); font-weight:800; font-size:clamp(30px,4.4vw,48px); line-height:1.05; margin:0 0 10px; letter-spacing:-.02em; color:#fff; text-shadow:0 6px 28px rgba(0,0,0,.4);}
-  .login-hero h1 .hindi{font-weight:500; font-size:.5em; color:#C8CEE8; margin-left:10px; vertical-align:middle;}
-  .login-hero .lh-sub{font-family:var(--sans); font-size:14px; font-weight:600; letter-spacing:.01em; color:#FBBF77; margin:0 0 20px;}
-  /* ---- letter-by-letter SAMARTH breakdown card ---- */
-  .login-acronym{background:rgba(15,23,42,.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.1); border-radius:16px; padding:16px 18px; max-width:460px; box-shadow:0 14px 40px rgba(0,0,0,.35);}
-  .login-acronym .la-row{display:flex; align-items:center; gap:12px; padding:5px 0;}
-  .login-acronym .la-letter{flex:none; width:26px; height:26px; border-radius:8px; background:var(--target); color:#1A1203; font-family:var(--sans); font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 10px rgba(245,158,11,.25);}
-  .login-acronym .la-text{font-family:var(--sans); font-size:13.5px; font-weight:500; color:#E7EAF8; letter-spacing:.01em;}
-  .login-acronym .la-text b{color:var(--target); font-weight:800;}
-  .login-hero p.lh-tagline{font-size:12.5px; line-height:1.6; color:#AEB8DC; max-width:460px; margin:14px 0 0;}
-  .login-card{position:relative; z-index:2; width:370px; flex-shrink:0; background:rgba(15,23,42,.72); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.14); border-radius:18px; padding:32px 28px; box-shadow:0 24px 70px rgba(0,0,0,.5);}
-  .login-card h2{margin:0 0 6px; font-family:var(--serif); font-weight:800; font-size:24px; letter-spacing:-.015em; color:#fff; text-align:center;}
-  .login-card .login-sub{font-family:var(--sans); font-size:10.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#8691BE; margin:0 0 24px; text-align:center;}
-  .login-card label{display:block; text-align:left; font-family:var(--sans); font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#9BA7D4; margin-bottom:16px;}
-  .login-card input{display:block; width:100%; margin-top:6px; padding:11px 12px; border:1px solid rgba(255,255,255,.18); border-radius:9px; font-size:13.5px; font-family:var(--sans); background:rgba(255,255,255,.08); color:#fff; box-sizing:border-box;}
-  .login-card input::placeholder{color:#8891B5;}
-  .login-card input:focus{outline:2px solid var(--target); outline-offset:1px; background:rgba(255,255,255,.12);}
-  .login-card .btn.primary{width:100%; justify-content:center; margin-top:8px; padding:13px; background:var(--target); border:none; font-family:var(--sans); font-weight:700; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; border-radius:9px; color:#1A1203; cursor:pointer;}
-  .login-card .btn.primary:hover{background:#FBBF24;}
+  .login-top{position:relative; z-index:2; display:flex; justify-content:flex-end; align-items:center; min-height:56px; padding:16px 56px 0;}
+  .login-status{display:flex; align-items:center; gap:8px; font-size:12.5px; color:rgba(255,255,255,.75);}
+  .login-status[hidden]{display:none;}
+  .login-status .dot{width:7px; height:7px; border-radius:50%; background:#22C55E; flex:none;}
+  .login-status.down .dot{background:#EF4444;}
+  .login-main{position:relative; z-index:2; flex:1; display:flex; align-items:center; justify-content:space-between; gap:48px; padding:24px 56px;}
+  .login-hero{max-width:600px;}
+  .login-hero .lh-eyebrow{font-size:13px; font-weight:500; color:#C3CBE0; margin:0 0 14px; display:flex; align-items:center; gap:10px;}
+  .login-hero .lh-eyebrow::before{content:''; width:3px; height:16px; border-radius:1px; background:var(--target); flex:none;}
+  .login-hero h1{font-family:var(--sans); font-weight:600; font-size:clamp(36px,4vw,52px); line-height:1.1; letter-spacing:-.01em; color:#fff; margin:0 0 12px;}
+  .login-hero h1 .hindi{font-family:'Noto Sans','Noto Sans Devanagari',sans-serif; font-weight:500; font-size:.5em; color:#CBD2E6; margin-left:8px; vertical-align:middle; letter-spacing:0;}
+  .login-hero .lh-sub{font-size:15px; font-weight:500; color:#FCCB74; margin:0; line-height:1.45;}
+  .login-hero .lh-tagline{font-size:14px; line-height:1.6; color:#C3CBE0; max-width:480px; margin:16px 0 0;}
+  .login-card{position:relative; width:400px; flex-shrink:0; background:#0E1A2E; border:1px solid rgba(255,255,255,.10); border-radius:8px; padding:32px;}
+  .login-card h2{font-family:var(--sans); font-weight:600; font-size:20px; line-height:1.3; letter-spacing:0; color:#fff; margin:0 0 24px; text-align:left;}
+  .login-card .lf{margin-bottom:18px;}
+  .login-card label{display:block; font-size:13px; font-weight:500; color:#C3CBE0; margin:0 0 6px; text-align:left;}
+  .login-card input{display:block; width:100%; height:44px; padding:0 12px; margin:0; border:1px solid #2B3B57; border-radius:6px;
+    background:#0A1424; color:#fff; font-family:var(--sans); font-size:14px; outline:none; transition:border-color .12s ease, box-shadow .12s ease;}
+  .login-card input:hover{border-color:#3A4C6B;}
+  .login-card input:focus{border-color:var(--target); box-shadow:0 0 0 3px rgba(245,158,11,.22); background:#0A1424;}
+  .login-card input:-webkit-autofill, .login-card input:-webkit-autofill:hover{
+    -webkit-text-fill-color:#fff; caret-color:#fff; -webkit-box-shadow:0 0 0 1000px #0A1424 inset; box-shadow:0 0 0 1000px #0A1424 inset; transition:background-color 600000s 0s;}
+  .login-card input:-webkit-autofill:focus{
+    -webkit-text-fill-color:#fff; -webkit-box-shadow:0 0 0 1000px #0A1424 inset, 0 0 0 3px rgba(245,158,11,.22); box-shadow:0 0 0 1000px #0A1424 inset, 0 0 0 3px rgba(245,158,11,.22);}
+  .login-card .lpw{position:relative;}
+  .login-card .lpw input{padding-right:64px;}
+  .login-card .lpw-toggle{position:absolute; top:50%; right:6px; transform:translateY(-50%); height:30px; padding:0 10px; border:none; border-radius:4px;
+    background:transparent; color:#AEB8D0; font-family:var(--sans); font-size:12.5px; font-weight:500; cursor:pointer;}
+  .login-card .lpw-toggle:hover{color:#fff; background:rgba(255,255,255,.06);}
+  .login-card .lpw-toggle:focus-visible{outline:2px solid var(--target); outline-offset:0;}
+  .login-card .btn.primary{display:flex; align-items:center; justify-content:center; width:100%; height:44px; padding:0 16px; margin-top:6px;
+    background:var(--target); border:none; border-radius:6px; color:#111827; font-family:var(--sans); font-size:14px; font-weight:600;
+    letter-spacing:0; text-transform:none; box-shadow:none; cursor:pointer; transition:background .12s ease;}
+  .login-card .btn.primary:hover{background:#FBBF24; box-shadow:none;}
+  .login-card .btn.primary:active{transform:none;}
+  .login-card .btn.primary:focus-visible{outline:2px solid #fff; outline-offset:2px;}
   .login-card .btn.primary:disabled{opacity:.65; cursor:default;}
-  .login-note{margin-top:18px; text-align:center; font-size:11px; color:#9AA4C9; line-height:1.5;}
-  .login-error{margin-top:14px; font-size:12px; color:#FFB4BE; background:rgba(184,46,66,.28); border:1px solid rgba(255,140,155,.32); border-radius:8px; padding:9px 11px; text-align:left;}
-  .login-loading{margin-top:14px; font-size:12px; color:#AEB8DC; text-align:center;}
-  .login-pillbar{position:relative; z-index:2; display:flex; flex-wrap:wrap;}
-  .login-pillbar .lp{flex:1; min-width:150px; text-align:center; padding:14px 10px; font-family:var(--sans); font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#E7EAF8; background:rgba(2,6,23,.82); border-top:1px solid rgba(255,255,255,.08); border-right:1px solid rgba(255,255,255,.08);}
-  .login-pillbar .lp:last-child{border-right:none;}
-  @media (max-width:860px){
-    .login-main{flex-direction:column; justify-content:center; padding:120px 22px 24px; text-align:center;}
-    .login-hero{padding-top:0;}
-    .login-acronym{margin:0 auto;}
-    .login-acronym .la-row{justify-content:flex-start;}
-    .login-hero p.lh-tagline{margin-left:auto; margin-right:auto;}
-    .login-card{width:100%; max-width:380px;}
-    .login-pillbar{display:none;}
+  .login-note{margin:24px 0 0; padding-top:16px; border-top:1px solid rgba(255,255,255,.08); font-size:12.5px; line-height:1.55; color:#9AA6C4; text-align:left;}
+  .login-error{margin-top:16px; font-size:13px; line-height:1.45; color:#FECACA; background:rgba(220,38,38,.16); border:1px solid rgba(248,113,113,.35); border-radius:6px; padding:10px 12px; text-align:left;}
+  .login-loading{margin-top:16px; font-size:13px; color:#AEB8D0; text-align:left;}
+  .login-foot{position:relative; z-index:2; padding:16px 56px 20px; font-size:12.5px; color:rgba(255,255,255,.86);}
+  @media (max-width:1100px){
+    .login-top, .login-main, .login-foot{padding-left:40px; padding-right:40px;}
+  }
+  @media (max-width:900px){
+    .login-overlay{background:linear-gradient(180deg, rgba(2,6,23,.88) 0%, rgba(2,6,23,.78) 40%, rgba(2,6,23,.62) 60%, rgba(2,6,23,.88) 100%);}
+    .login-main{flex-direction:column; align-items:stretch; justify-content:center; gap:28px; padding:8px 24px 24px;}
+    .login-top, .login-foot{padding-left:24px; padding-right:24px;}
+    .login-hero{max-width:none;}
+    .login-card{width:100%; max-width:440px;}
+  }
+  @media (max-width:600px){
+    .login-top{min-height:44px; padding-top:12px;}
+    .login-hero .lh-tagline{display:none;}
+    .login-hero h1{font-size:34px;}
+    .login-hero .lh-sub{font-size:14px;}
+    .login-card{padding:24px;}
   }
   #signOutBtn{background:transparent; border:1px solid rgba(255,255,255,.22); border-radius:7px; color:inherit; font-size:11px; font-weight:600; padding:5px 10px; cursor:pointer; font-family:var(--sans); margin-left:12px;}
   #signOutBtn:hover{background:rgba(255,255,255,.08);}
@@ -1689,62 +1698,41 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="login-bg"></div>
   <div class="login-overlay"></div>
 
-  <div class="login-brandrow">
-    <div class="lbaccent"></div>
-    <div class="lbtxt">
-      <b>SAMARTH</b>
-      <span class="login-badge">Secure Portal</span>
-      <span class="lbsub">South Western Railway &middot; Track Machines</span>
-    </div>
+  <div class="login-top">
+    <div class="login-status" id="loginStatus" hidden title="Live check of the SAMARTH sign-in service"><span class="dot"></span><span class="txt"></span></div>
   </div>
-
-  <div class="login-status"><span class="dot"></span>System Online</div>
 
   <div class="login-main">
     <div class="login-hero">
-      <div class="lh-eyebrow">South Western Railway &middot; Track Machines Division</div>
-      <h1>SAMARTH <span class="hindi">(&#2360;&#2350;&#2352;&#2381;&#2341;)</span></h1>
+      <div class="lh-eyebrow">Track Machines Department</div>
+      <h1>SAMARTH <span class="hindi" lang="hi">(&#2360;&#2350;&#2352;&#2381;&#2341;)</span></h1>
       <p class="lh-sub">South Western Automated Monitoring, Alerting &amp; Real-Time Track-Machine Hub</p>
-
-      <div class="login-acronym">
-        <div class="la-row"><div class="la-letter">S</div><div class="la-text"><b>S</b>outh Western</div></div>
-        <div class="la-row"><div class="la-letter">A</div><div class="la-text"><b>A</b>utomated</div></div>
-        <div class="la-row"><div class="la-letter">M</div><div class="la-text"><b>M</b>onitoring,</div></div>
-        <div class="la-row"><div class="la-letter">A</div><div class="la-text"><b>A</b>lerting &amp;</div></div>
-        <div class="la-row"><div class="la-letter">R</div><div class="la-text"><b>R</b>eal-Time</div></div>
-        <div class="la-row"><div class="la-letter">T</div><div class="la-text"><b>T</b>rack-Machine</div></div>
-        <div class="la-row"><div class="la-letter">H</div><div class="la-text"><b>H</b>ub</div></div>
-      </div>
-
-      <p class="lh-tagline">Real-time monitoring and management of track machine progress, fleet health, exceptions and indent position across South Western Railway.</p>
+      <p class="lh-tagline">Monitoring of track machine progress, fleet health, exceptions and indent position across South Western Railway.</p>
     </div>
 
     <div class="login-card">
-      <h2>Welcome Back</h2>
-      <p class="login-sub">SAMARTH</p>
+      <h2>Sign in to SAMARTH</h2>
       <form id="loginForm">
-        <label>Email
+        <div class="lf">
+          <label for="loginEmail">Email address</label>
           <input type="email" id="loginEmail" autocomplete="username" required>
-        </label>
-        <label>Password
-          <input type="password" id="loginPassword" autocomplete="current-password" required>
-        </label>
-        <button type="submit" class="btn primary" id="loginSubmitBtn">Sign In</button>
+        </div>
+        <div class="lf">
+          <label for="loginPassword">Password</label>
+          <div class="lpw">
+            <input type="password" id="loginPassword" autocomplete="current-password" required>
+            <button type="button" class="lpw-toggle" id="loginPwToggle" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" id="loginSubmitBtn">Sign in</button>
       </form>
       <div class="login-loading" id="loginLoading" style="display:none;">Checking your session&hellip;</div>
       <div class="login-error" id="loginError" style="display:none;"></div>
-      <div class="login-note">Access is by invitation only &bull; contact your system administrator for a login</div>
+      <p class="login-note">Access is by invitation only. Contact your system administrator for an account.</p>
     </div>
   </div>
 
-  <div class="login-pillbar">
-    <div class="lp">Overview</div>
-    <div class="lp">Progress vs Target</div>
-    <div class="lp">Reason for Shortfall</div>
-    <div class="lp">Exceptions &amp; Downtime</div>
-    <div class="lp">Fleet Health</div>
-    <div class="lp">Indent Position</div>
-  </div>
+  <div class="login-foot">South Western Railway &middot; Track Machines Department</div>
 </div>
 
 
@@ -9514,6 +9502,38 @@ function showLoginError(msg){
   loginError.style.display = 'block';
 }
 function hideLoginError(){ loginError.style.display = 'none'; }
+
+// Login page helpers (27-Nov-2026): show/hide password, and a real
+// status indicator -- a single request to the Supabase sign-in service's
+// own health endpoint. The dot only appears once that check returns, so
+// it never claims "available" without having actually checked.
+(function(){
+  const t = document.getElementById('loginPwToggle');
+  if (t) t.addEventListener('click', ()=>{
+    const i = document.getElementById('loginPassword');
+    const show = i.type === 'password';
+    i.type = show ? 'text' : 'password';
+    t.textContent = show ? 'Hide' : 'Show';
+    t.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    t.setAttribute('aria-pressed', String(show));
+  });
+})();
+(async function loginHealthCheck(){
+  const el = document.getElementById('loginStatus');
+  if (!el) return;
+  const txt = el.querySelector('.txt');
+  let ok = false;
+  try{
+    const ctl = new AbortController();
+    const timer = setTimeout(()=>ctl.abort(), 6000);
+    const r = await fetch(SUPABASE_URL + '/auth/v1/health', { headers:{ apikey: SUPABASE_ANON_KEY }, signal: ctl.signal });
+    clearTimeout(timer);
+    ok = r.ok;
+  }catch(e){ ok = false; }
+  el.classList.toggle('down', !ok);
+  txt.textContent = ok ? 'Sign-in service available' : 'Sign-in service unreachable';
+  el.hidden = false;
+})();
 
 async function loadDashboardData(){
   const { data, error } = await sb
