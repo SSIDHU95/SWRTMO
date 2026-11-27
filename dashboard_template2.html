@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <title>SAMARTH</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&display=swap">
 <style>
   /* =====================================================================
      Visual system (redesigned 12-Oct-2026 per the user's request for a
@@ -30,9 +30,9 @@
     --hdr-sub:#94A3B8;
     --canvas-bg:#FFFFFF; --canvas-text:#0F172A; --canvas-border:#E2E8F0; --canvas-accent:#4338CA;
     --shadow-sm:0 1px 2px rgba(15,23,42,.04); --shadow-md:0 4px 14px rgba(15,23,42,.08);
-    --mono:'JetBrains Mono',ui-monospace,monospace;
-    --sans:'Inter',system-ui,-apple-system,sans-serif;
-    --serif:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:'Noto Sans',system-ui,-apple-system,sans-serif;
+    --sans:'Noto Sans',system-ui,-apple-system,sans-serif;
+    --serif:'Noto Sans',system-ui,-apple-system,sans-serif;
     /* ---- motion system (31-Oct-2026 polish pass) -- shared easing/duration
        tokens used by every hover/press/tab/drawer/reveal transition below,
        so the whole dashboard moves with one consistent feel instead of each
@@ -230,7 +230,7 @@
   tbody tr{transition:background var(--dur-fast) var(--ease-out);}
   tbody tr:hover{background:var(--surface-2);}
   tbody tr[style*="cursor:pointer"]:active, tbody tr[data-m]:active, tbody tr[data-ri]:active{background:var(--surface-2);}
-  td.num,th.num{text-align:right; font-family:var(--mono);}
+  td.num,th.num{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums;}
   .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; font-family:var(--mono);}
   .pill.good{background:var(--good-bg); color:var(--good);}
   .pill.warn{background:var(--warn-bg); color:var(--warn);}
@@ -806,7 +806,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 /* general typography */
 .leaflet-container {
-	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-family: 'Noto Sans', "Helvetica Neue", Arial, Helvetica, sans-serif;
 	font-size: 12px;
 	font-size: 0.75rem;
 	line-height: 1.5;
@@ -3444,7 +3444,7 @@ function textToPngBlob(text){
     const width = 760, padding = 30, lineHeight = 23;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const monoFamily = cssVar('--mono') || "'JetBrains Mono', monospace";
+    const monoFamily = cssVar('--mono') || "'Noto Sans', sans-serif";
     const font = '15px ' + monoFamily;
     const bgColor = cssVar('--canvas-bg') || '#FFFFFF';
     const textColor = cssVar('--canvas-text') || '#0F172A';
