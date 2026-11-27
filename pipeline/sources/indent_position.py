@@ -505,14 +505,25 @@ def add_days_in_status(stages, as_of):
                 # a cell holding two dates (e.g. PO and modified PO:
                 # '08/10/26 23/10/26') -- the first is when this status began
                 d = _first_date(r.get(date_field))
+            sheet = _sheet_days(r.get(sheet_field))
+            computed = (as_of - d).days if (d is not None and d <= as_of) else None
             if d is not None and key == 'tenderUnderFinalisation' and d > as_of:
                 note = f"opens {r.get(date_field)}"
-            elif d is not None and d <= as_of:
-                days, since = (as_of - d).days, r.get(date_field)
-            if days is None and note is None:
-                days = _sheet_days(r.get(sheet_field))
-                if days is not None and key == 'tenderUnderFinalisation' and days == 0:
-                    days = None  # 0 here means "not yet opened"
+            elif sheet is not None and sheet > 0:
+                # The sheet's own "days in current status" figure wins. It
+                # usually equals (today - status date), but when an indent
+                # restarts a status (LOA withdrawn, indent revised, PO
+                # modified...) the office keeps the original date and
+                # resets the day count -- computing from the date there
+                # gave a misleading number (S.No 17: 240 vs sheet's 15).
+                days = sheet
+                if computed is not None and abs(computed - sheet) <= 1:
+                    since = r.get(date_field)
+            elif computed is not None:
+                # sheet blank, unreadable or 0 -> fall back to the date
+                days, since = computed, r.get(date_field)
+            elif sheet == 0 and key != 'tenderUnderFinalisation':
+                days = 0
             r['daysInStatus'] = days
             r['statusSince'] = since
             r['daysNote'] = note
