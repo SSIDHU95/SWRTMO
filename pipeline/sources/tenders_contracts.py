@@ -69,10 +69,20 @@ def _fmt_date(v):
 def _extract_agreements(rows, as_of):
     agreements = []
     for r in rows:
-        sno = _g(r, 'S No', 'S.No', 'S.No.', 'Sl.No.', 'Sl No', 'Sl.No')
+        sno = ph.num(_g(r, 'S No', 'S.No', 'S.No.', 'Sl.No.', 'Sl No', 'Sl.No'))
         firm = ph.clean_text(_g(r, 'Firm Name'))
-        if not isinstance(sno, (int, float)) or not firm:
+        if not firm:
             continue
+        if sno is None:
+            # 27-Nov-2026: the sheet's serial-number column has a blank
+            # (spaces-only) header, so the live sync drops it and every
+            # row arrives with no S No -- which used to skip ALL rows and
+            # show 0 agreements / Rs 0 everywhere. A real agreement row
+            # always has a firm and a contract type or amount; number
+            # those in sheet order (same as the sheet's own 1, 2, 3...).
+            if not (ph.clean_text(_g(r, 'Contract Type')) or ph.num(_g(r, 'Agreement Amount')) is not None):
+                continue
+            sno = len(agreements) + 1
         ctype = ph.clean_text(_g(r, 'Contract Type'))
         loa_no = ph.clean_text(_g(r, 'LOA/Agreement No and Date'))
         allocation = ph.clean_text(_g(r, 'Allocation'))
@@ -163,6 +173,20 @@ def _extract_contacts(rows):
     return contacts
 
 
+def _value_num(raw):
+    """Rupee value -> float. Plain numbers/'Rs. 3,09,10,205/-' via ph.num;
+    also '54.92 Lakhs' / '1.2 Cr' text (seen in the Works proposal rows),
+    which ph.num alone can't read."""
+    v = ph.num(raw)
+    if v is not None:
+        return v
+    m = re.fullmatch(r'\s*(?:rs\.?|₹)?\s*([\d,]+(?:\.\d+)?)\s*(lakhs?|lacs?|l|crores?|cr)\.?\s*', str(raw or ''), re.I)
+    if not m:
+        return None
+    n = float(m.group(1).replace(',', ''))
+    return n * (1e7 if m.group(2).lower().startswith('c') else 1e5)
+
+
 def _extract_proposals(rows):
     proposals = []
     for r in rows:
@@ -173,7 +197,7 @@ def _extract_proposals(rows):
         desc = ph.clean_text(_g(r, 'Description of Item'))
         items = _g(r, 'Items/ Number of machines', 'Item/ no of machines')
         value_raw = _g(r, 'Value')
-        value_num = ph.num(value_raw)
+        value_num = _value_num(value_raw)
         remark = ph.clean_text(_g(r, 'Remarks'))
         currency = ph.clean_text(_g(r, 'Currency of current works', 'Currency of current AMC',
                                       'Currency of current'))
