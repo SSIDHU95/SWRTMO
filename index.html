@@ -20,19 +20,19 @@
      note just below the :root block). ---- */
   :root{
     /* ---- Rail Spectrum -- light ---- */
-    --navy:#0F172A; --navy-2:#020617; --steel:#4F46E5; --steel-2:#6366F1;
-    --bg:#F8FAFC; --surface:#FFFFFF; --surface-2:#F1F5F9; --border:rgba(15,23,42,.08);
-    --text:#0F172A; --muted:#64748B; --faint:#94A3B8;
-    --good:#059669; --good-bg:#ECFDF5; --warn:#D97706; --warn-bg:#FFFBEB;
-    --bad:#E11D48; --bad-bg:#FFF1F2; --accent:#4F46E5;
+    --navy:#111827; --navy-2:#020617; --steel:#17365D; --steel-2:#1E40AF; --primary:#1E40AF;
+    --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#F1F3F6; --border:#DDE2E8;
+    --text:#1F2937; --muted:#64748B; --faint:#94A3B8;
+    --good:#15803D; --good-bg:#F0FDF4; --warn:#D97706; --warn-bg:#FFFBEB;
+    --bad:#DC2626; --bad-bg:#FEF2F2; --accent:#1E40AF;
     --cat-commissioning:#7C3AED; --cat-commissioning-bg:#F5F3FF;
     --cat-maintenance:#0D9488; --cat-maintenance-bg:#F0FDFA;
     --cat-transit:#0284C7; --cat-transit-bg:#F0F9FF;
-    --target:#F59E0B; --badge-accent-bg:#EEF2FF; --badge-accent-text:#4338CA;
-    --wf-long-bg:#EEF2FF; --wf-long-border:#C7D2FE;
+    --target:#F59E0B; --badge-accent-bg:#E8EEF7; --badge-accent-text:#17365D;
+    --wf-long-bg:#EEF2F7; --wf-long-border:#C9D3E0;
     --hdr-sub:#94A3B8;
-    --canvas-bg:#FFFFFF; --canvas-text:#0F172A; --canvas-border:#E2E8F0; --canvas-accent:#4338CA;
-    --shadow-sm:0 1px 2px rgba(15,23,42,.04); --shadow-md:0 4px 14px rgba(15,23,42,.08);
+    --canvas-bg:#FFFFFF; --canvas-text:#1F2937; --canvas-border:#DDE2E8; --canvas-accent:#17365D;
+    --shadow-sm:0 0 0 transparent; --shadow-md:0 4px 12px rgba(17,24,39,.10);
     --mono:'Noto Sans',system-ui,-apple-system,sans-serif;
     --sans:'Noto Sans',system-ui,-apple-system,sans-serif;
     --serif:'Noto Sans',system-ui,-apple-system,sans-serif;
@@ -1287,7 +1287,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .stn-iohpoh-flag svg{width:7px; height:7px; stroke:#fff; stroke-width:2;}
   .conf-pill{display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
     padding:2px 7px; border-radius:20px;}
-  .conf-pill.surveyed{background:#ECFDF5; color:#059669;}
+  .conf-pill.surveyed{background:#F0FDF4; color:#15803D;}
   .conf-pill.confirmed{background:#EFF6FF; color:#2563EB;}
   .conf-pill.approximate{background:#FFFBEB; color:#B45309;}
   .conf-pill .ring{width:7px; height:7px; border-radius:50%; border:1.5px solid currentColor;}
@@ -1484,6 +1484,123 @@ svg.leaflet-image-layer.leaflet-interactive path {
 #samSend:hover{background:var(--steel);}
 #samSend:active{transform:scale(.92);}
 @media(max-width:480px){ #samPanel{right:6px; left:6px; width:auto; bottom:78px; height:62vh;} #samBtn{right:14px; bottom:14px;} }
+</style>
+<style>
+  /* =====================================================================
+     SAMARTH design system v2 (27-Nov-2026) -- per Shruti's enterprise UI
+     refinement brief: an understated institutional look (IBM Carbon / SAP
+     Fiori / Fluent 2 *inspired*, not copied). This block is CSS-ONLY and
+     sits after every other dashboard stylesheet so it wins by source
+     order; it changes no markup, class, id or script, so every click
+     handler, the admin-portal tab/card gating (closest('.card'), widget
+     ids, #tabNav button display) and all data rendering are untouched.
+
+     Deliberately NOT changed here: the login screen (her own reference
+     design), division colours (come from the data), the map's status
+     rings / category colours (--cat-*), chart category palettes, and map
+     markers -- these carry operational meaning, not decoration.
+
+     The colour tokens themselves (navy header, primary/accent blues,
+     page/surface/border/text/status colours) are set in the :root block
+     at the top of the main stylesheet; this block holds the shared shape,
+     spacing and typography rules every module now inherits.
+     ===================================================================== */
+  :root{
+    --radius:6px; --radius-sm:4px;
+    --space-page-x:32px;
+  }
+
+  /* ---- base typography ---- */
+  /* scoped to the dashboard itself so the login screen is untouched */
+  nav.tabs, main, .drawer, footer{font-size:14px; line-height:1.5;}
+  main h1, main h2, main h3, .drawer h3{font-weight:600; letter-spacing:0;}
+
+  /* ---- page width: use the screen instead of a narrow 1280px column ---- */
+  main{max-width:1760px; padding:24px var(--space-page-x) 60px;}
+  @media (max-width:1024px){ main{padding:20px 24px 56px;} }
+  @media (max-width:640px){ main{padding:16px 16px 48px;} }
+
+  /* ---- navigation: flat bar with an underline for the active tab ---- */
+  nav.tabs{background:var(--surface); gap:0; padding:0 calc(var(--space-page-x) - 14px);}
+  nav.tabs::before{background:linear-gradient(to right, var(--surface), transparent);}
+  nav.tabs::after{background:linear-gradient(to left, var(--surface), transparent);}
+  nav.tabs button{border:none; border-bottom:2px solid transparent; border-radius:0; padding:12px 14px 10px; font-size:13.5px; font-weight:500;}
+  nav.tabs button:hover{background:transparent; color:var(--text);}
+  nav.tabs button:active{transform:none;}
+  nav.tabs button.active{background:transparent; box-shadow:none; border-color:transparent; border-bottom-color:var(--steel); color:var(--steel); font-weight:600;}
+  nav.tabs button.active::before{display:none;}
+  .tab-badge{border-radius:var(--radius-sm); font-weight:600;}
+  @media (max-width:640px){ nav.tabs{padding:0 8px;} nav.tabs button{padding:11px 11px 9px; font-size:13px;} }
+
+  /* ---- surfaces: thin borders, small radii, no drop shadows ---- */
+  .card, .kpi, .nm-kpi, .dcard, .insight, .msgbox,
+  .exc-card, .ap-card, .ds-shift-card, .dmachine-card,
+  .tc-attn, .tc-ag-card, .tc-contact-card, .tc-stepper-card, .tc-kanban-col, .tc-kanban-card, .tc-loa-card,
+  .ip-stage-card, .ip-safety-card, .sfraw-remark{
+    border-radius:var(--radius); box-shadow:none;
+  }
+  .card{padding:20px 22px;}
+  .card h3{font-size:16px; font-weight:600; letter-spacing:0;}
+  .card .cap{font-size:12.5px;}
+  .dstat, .ap-timeline-entry .apt-text, .tc-ag-renewal{border-radius:var(--radius-sm);}
+
+  /* ---- KPI tiles: clear title / value / supporting-text hierarchy ---- */
+  .kpi, .nm-kpi{padding:16px 18px;}
+  .kpi .lbl, .nm-kpi .lbl{font-size:12px; text-transform:none; letter-spacing:0; color:var(--muted); font-weight:500; margin-bottom:4px;}
+  .kpi .val, .nm-kpi .val{font-size:28px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums;}
+  .kpi .hint, .nm-kpi .hint{font-size:12px;}
+  .kpi:hover{box-shadow:none; transform:none; border-color:var(--steel-2);}
+  .kpi:active{transform:none;}
+
+  /* ---- tables: compact, sentence-case headers, subtle dividers ---- */
+  table{font-size:13px;}
+  thead th{font-size:12px; font-weight:600; text-transform:none; letter-spacing:0; color:var(--muted); padding:9px 12px;}
+  tbody td{padding:8px 12px; font-variant-numeric:tabular-nums;}
+  .drawer-body table{font-size:12.5px;}
+
+  /* ---- status labels: small rectangles instead of pills ---- */
+  .pill{border-radius:var(--radius-sm); font-weight:600; font-family:var(--sans); font-variant-numeric:tabular-nums;}
+  .dbadge, .exc-card .ecat, .ap-card .apcat{border-radius:3px; font-weight:600;}
+
+  /* ---- buttons & form controls ---- */
+  /* .btn rules scoped to main/drawer so the login screen's own button is untouched */
+  main .btn, .drawer .btn{border-radius:var(--radius-sm); font-size:12.5px; padding:7px 14px; line-height:1.3;}
+  main .btn.primary, .drawer .btn.primary{background:var(--primary); border-color:var(--primary);}
+  main .btn:hover, .drawer .btn:hover{box-shadow:none; border-color:var(--steel-2);}
+  main .btn.primary:hover, .drawer .btn.primary:hover{background:var(--steel); border-color:var(--steel);}
+  main .btn:active, .drawer .btn:active, .dlbtn:active, .drawer-close:active, .clickcard:active, .ip-stage-card:active,
+  .nm-chip:active, .nm-fsbtn:active{transform:none;}
+  .dlbtn{border-radius:var(--radius-sm); font-size:11px;}
+  .searchbar input, .searchbar select, .srden-picker select{border-radius:var(--radius-sm);}
+  .dchip{border-radius:var(--radius-sm);}
+  .nm-chip, .nm-searchbox, .nm-select, .nm-fsbtn, .nm-divbtn{border-radius:var(--radius-sm);}
+  .nm-divbtn{font-weight:600;}
+  .nm-divbtn:active{transform:none;}
+  .clickcard:hover{box-shadow:none;}
+
+  /* ---- slide-out detail panel ---- */
+  .drawer-mask{background:rgba(17,24,39,.28);}
+  .drawer{width:min(520px,94vw); box-shadow:-1px 0 0 var(--border), -8px 0 24px rgba(17,24,39,.10);}
+  .drawer-hd{padding:16px 20px;}
+  .drawer-hd h3{font-size:16px; font-weight:600;}
+  .drawer-hd .cap{font-size:12px;}
+  .drawer-close{border-radius:var(--radius-sm); background:transparent; border:1px solid var(--border);}
+  .drawer-body{padding:16px 20px;}
+  .dcard{padding:14px 16px;}
+  .dcard h4{font-size:13px; font-weight:600; text-transform:none; letter-spacing:0; color:var(--text);}
+  .dcard h4 .ic{display:none;}
+  .dstat .l{font-size:11px; text-transform:none; letter-spacing:0; color:var(--muted); font-weight:500;}
+  .dstat .v{font-weight:600; font-variant-numeric:tabular-nums;}
+  .dbreakrow .dbtitle{font-weight:600; font-size:13px;}
+  .dbreakrow .dbsub{font-size:11.5px;}
+  .dbreakrow .dbcount{font-weight:600;}
+  .dbreakrow:hover{border-radius:var(--radius-sm);}
+  .dbar-track, .dbar-fill{border-radius:2px;}
+
+  /* ---- assistant panel (shape only) ---- */
+  #samPanel{border-radius:var(--radius);}
+  .sam-chip, #samInput, .sam-actions button{border-radius:var(--radius-sm);}
+  #samBtn:hover, #samBtn:active, .sam-chip:active, .sam-actions button:active, #samSend:active, #samClose:active{transform:none;}
 </style>
 
 
@@ -2951,6 +3068,19 @@ function backBtn(label, fn){
   setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', fn); }, 0);
   return `<button class="dback" id="${id}">&larr; ${esc(label)}</button>`;
 }
+// Machine-type card heading, e.g. "MPT (Multipurpose Tamper)" -- added
+// 27-Nov-2026 per Shruti: abbreviation + full name in brackets, with the
+// Tamping/Non-Tamping category moved underneath as secondary text and the
+// internal classification notes ("user-confirmed 28-Sep-2026 definitive
+// list" etc.) no longer shown. Any trailing parenthetical in the canonical
+// full name (UNI's long "points & crossings + plain track; includes ...")
+// is dropped so the heading stays short and never nests brackets.
+function typeHeading(t){
+  const full = ((DATA.progress && DATA.progress.typeFullNames) || {})[t];
+  const short = full ? String(full).replace(/\s*\(.*\)\s*$/, '').trim() : '';
+  return short ? `${t} (${short})` : t;
+}
+
 function breakRow(title, sub, count, pct, onClick){
   const cls = pct==null? '' : (pct>=1?'good':(pct>=0.85?'warn':'bad'));
   const bar = pct!=null ? `<div class="dbar-track"><div class="dbar-fill ${cls}" style="width:${Math.min(pct*100,100)}%"></div></div>` : '';
@@ -3274,7 +3404,7 @@ function openFleetSizeDrawer(){
       </select>`);
 
     html += dcard(`By Machine Type${divFilter?' — '+esc(divFilter):''}${tampFilter?' — '+esc(tampFilter):''}`, `${typeRows.length} types &bull; click a type for the machine list`,
-      typeRows.map(([t,ms])=>breakRow(`${t} (${esc(ms[0].tamping)})`, ms[0].tampingNote||'', ms.length+' sets', null,
+      typeRows.map(([t,ms])=>breakRow(typeHeading(t), esc(ms[0].tamping), ms.length+' sets', null,
         ()=>drillMachines(`${t} — ${divFilter||'All Divisions'}`, `Machine type ${t}`, m=> m.type===t && (!divFilter || m.div===divFilter) && (!tampFilter || m.tamping===tampFilter)))).join(''));
 
     if (!divFilter && !tampFilter){
@@ -3602,7 +3732,7 @@ function textToPngBlob(text){
     const bgColor = cssVar('--canvas-bg') || '#FFFFFF';
     const textColor = cssVar('--canvas-text') || '#0F172A';
     const borderColor = cssVar('--canvas-border') || '#E2E8F0';
-    const accentColor = cssVar('--canvas-accent') || '#4338CA';
+    const accentColor = cssVar('--canvas-accent') || '#17365D';
     ctx.font = font;
     const maxWidth = width - padding*2;
     const lines = [];
@@ -4798,8 +4928,8 @@ function openMachineTypeMonthlyDrawer(type){
 //      during the preview (83/87 machines matched; the handful that don't
 //      are shown plainly as unmatched, never silently dropped or guessed).
 // =====================================================================
-const SFRAW_TMO_CATS = [['iohPoh','IOH/POH','#7C3AED','IOH/ POH'], ['underRepair','Under Repair','#E11D48','Under Repair'], ['schMaint','Sch. Maintenance','#0D9488','Sch. Maintenance'], ['staffAccount','Staff account','#D97706','M/c Staff account'], ['shiftChange','Shift change','#64748B','Shift change']];
-const SFRAW_DIV_CATS = [['blockNotGiven','Block not given','#E11D48','Block not given'], ['blockNotPlanned','Block not planned','#D97706','Block Not Planned'], ['badWeather','Bad weather','#0284C7','Bad weather'], ['mcShifting','Machine shifting','#7C3AED','M/c Shifting'], ['depotWork','Depot work','#0D9488','Depot work'], ['txrExam','TXR Examination','#64748B','TXR Examination'], ['others','Others','#94A3B8','Others']];
+const SFRAW_TMO_CATS = [['iohPoh','IOH/POH','#7C3AED','IOH/ POH'], ['underRepair','Under Repair','#DC2626','Under Repair'], ['schMaint','Sch. Maintenance','#0D9488','Sch. Maintenance'], ['staffAccount','Staff account','#D97706','M/c Staff account'], ['shiftChange','Shift change','#64748B','Shift change']];
+const SFRAW_DIV_CATS = [['blockNotGiven','Block not given','#DC2626','Block not given'], ['blockNotPlanned','Block not planned','#D97706','Block Not Planned'], ['badWeather','Bad weather','#0284C7','Bad weather'], ['mcShifting','Machine shifting','#7C3AED','M/c Shifting'], ['depotWork','Depot work','#0D9488','Depot work'], ['txrExam','TXR Examination','#64748B','TXR Examination'], ['others','Others','#94A3B8','Others']];
 const SFRAW_CATS_ALL = SFRAW_TMO_CATS.concat(SFRAW_DIV_CATS);
 
 // ---- name matching against DATA.progress.machines (srden resolution only --

@@ -7,11 +7,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
 <style>
   :root{
-    --navy:#0F172A; --navy-2:#020617; --steel:#4F46E5; --steel-2:#6366F1;
-    --bg:#F8FAFC; --surface:#FFFFFF; --surface-2:#F1F5F9; --border:rgba(15,23,42,.08);
-    --text:#0F172A; --muted:#64748B; --faint:#94A3B8;
-    --good:#059669; --good-bg:#ECFDF5; --warn:#D97706; --warn-bg:#FFFBEB;
-    --bad:#E11D48; --bad-bg:#FFF1F2; --accent:#4F46E5;
+    --navy:#111827; --navy-2:#020617; --steel:#17365D; --steel-2:#1E40AF;
+    --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#F1F3F6; --border:#DDE2E8;
+    --text:#1F2937; --muted:#64748B; --faint:#94A3B8;
+    --good:#15803D; --good-bg:#F0FDF4; --warn:#D97706; --warn-bg:#FFFBEB;
+    --bad:#DC2626; --bad-bg:#FEF2F2; --accent:#1E40AF;
     --shadow-sm:0 1px 2px rgba(15,23,42,.04); --shadow-md:0 4px 14px rgba(15,23,42,.08);
     --sans:'Noto Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   }
@@ -27,7 +27,7 @@
   .btn:hover{background:var(--surface-2);}
   .btn:disabled{opacity:.5; cursor:default;}
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
-  .btn.primary:hover{background:#4338CA;}
+  .btn.primary:hover{background:#17365D;}
   .btn.ghost{background:transparent; border-color:transparent; color:#CBD5E1;}
   .btn.ghost:hover{background:rgba(255,255,255,.08);}
   .btn.danger{color:var(--bad); border-color:rgba(225,29,72,.3);}
@@ -44,7 +44,7 @@
   td{padding:10px; border-bottom:1px solid var(--border); vertical-align:middle;}
   tr:last-child td{border-bottom:none;}
   .pill{display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700;}
-  .pill.admin{background:#EEF2FF; color:#4338CA;}
+  .pill.admin{background:#E8EEF7; color:#17365D;}
   .pill.viewer{background:var(--surface-2); color:var(--muted);}
   .pill.never{background:var(--surface-2); color:var(--faint);}
   .pill.banned{background:var(--bad-bg); color:var(--bad);}
@@ -92,6 +92,12 @@
   .soon{font-size:11px; color:var(--faint); font-style:italic; padding:4px 12px 10px 38px;}
 
   #app{display:none;}
+  /* SAMARTH design system v2 (27-Nov-2026): same shape language as the
+     main dashboard -- small radii, thin borders, no drop shadows. */
+  .card{border-radius:6px; box-shadow:none;}
+  .modal, .loginBox, .tabrow{border-radius:6px;}
+  .toast{border-radius:4px;}
+  .btn, input, select, .pill, .field input, .field select{border-radius:4px;}
 </style>
 </head>
 <body>
