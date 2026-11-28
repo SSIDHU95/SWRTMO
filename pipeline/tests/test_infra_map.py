@@ -365,3 +365,51 @@ class TestBuildInfraMap(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestSheetTextInStationCells(unittest.TestCase):
+    """28-Nov-2026: 8 Mysuru Sr.DEN/West 'Station' cells in SrDEN Detailed
+    were overwritten with sentences of pasted text, which then appeared on
+    the site as fake stations in "Not mapped yet". They must be left out
+    of the stations and reported as rows to correct instead."""
+    def _payload(self):
+        return {'supplementary': {'SrDEN Detailed': [{
+            'title': 'Status of TM Sidings & Rest House in Mysuru Division (As on 26.11.2026)',
+            'rows': [
+                {'Sr.DEN': 'Sr.DEN/West', 'Section (Km)': 'HLN (87)-MYS (0)', 'Station': 'CMNR', 'Proposed': 'Proposed'},
+                {'Sr.DEN': 'Sr.DEN/West', 'Station': 'It is looking good now, but there is something I want to explain to you:', 'TM (2)': 'Sanctioned'},
+                {'Sr.DEN': 'Sr.DEN/West', 'Station': 'KRYP  KKMI', 'TM (3)': 'Proposed'},
+            ]}]}}
+
+    def test_sentence_is_not_a_station(self):
+        codes = [r['station'] for r in infra_map._parse_srden_detailed(self._payload(), {})]
+        self.assertEqual(codes, ['CMNR', 'KRYP  KKMI'])
+
+    def test_sentence_is_reported(self):
+        issues = infra_map.sheet_issues(self._payload())
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0]['division'], 'MYS')
+        self.assertTrue(issues[0]['text'].startswith('It is looking good'))
+
+
+class TestStationRowsFromSrdenDetailed(unittest.TestCase):
+    """28-Nov-2026: the old 'CE TM Sr DEN detail' tab syncs no rows any
+    more, which left Stations Covered = 0, Pending - CN Units = 0 and an
+    empty Sr.DEN table. Station rows now come from 'SrDEN Detailed'."""
+    def test_fallback_builds_station_rows_and_rollups(self):
+        from sources import sidings_rest_house as sr
+        payload = {'masterSummary': {}, 'ceTmSrDenDetail': [], 'supplementary': {'SrDEN Detailed': [{
+            'title': 'Status of TM Sidings & Rest House in Hubballi Division (As on 26.11.2026)',
+            'rows': [
+                {'Sr.DEN': 'Sr.DEN/East', 'Section (Km)': 'A-B', 'Station': 'KJDI', 'TM (2)': 'Sanctioned', 'Proposed': 'Proposed', 'Remark': 'To be done by CN Org.'},
+                {'Sr.DEN': 'Sr.DEN/East', 'Station': 'GDG', 'TM': 'TM', 'RGM': 'RGM', 'Available': 'Available'},
+                {'Sr.DEN': 'Sr.DEN/East', 'Station': 'XYZ'},   # no entry at all -> not counted
+            ]}]}}
+        out = sr.extract_sidings_rest_houses(payload)
+        rows = {r['station']: r for r in out['stationRows']}
+        self.assertEqual(set(rows), {'KJDI', 'GDG'})
+        self.assertEqual((rows['KJDI']['sidingStatus'], rows['KJDI']['rhStatus']), ('Sanctioned', 'Proposed'))
+        self.assertEqual(rows['GDG']['sidingType'], 'TM + RGM')
+        self.assertEqual(rows['KJDI']['asOf'], '26.11.2026')
+        self.assertEqual(out['responsibility']['overall'], {'CN (Construction Org)': 1})
+        self.assertEqual(out['srdenTable'][0]['stations'], 2)
