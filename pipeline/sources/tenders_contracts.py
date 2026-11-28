@@ -243,7 +243,7 @@ def _extract_tenders(rows, as_of):
 
         tenders.append(dict(
             sno=int(sno), worksOrAmc=works_amc, tenderType=ttype, description=desc, items=items,
-            value=value, dateFloated=_fmt_date(date_floated), dateOpening=_fmt_date(date_opening),
+            value=value, valueNum=_value_num(value), dateFloated=_fmt_date(date_floated), dateOpening=_fmt_date(date_opening),
             tcExecutive=tc_exec, tcFinance=tc_fin, tcSister=tc_sis, taa=taa, currentHolder=holder,
             pendingSinceRaw=pending_since,
             pendingDaysRaw=(pending_days_raw if isinstance(pending_days_raw, (int, float)) else None),

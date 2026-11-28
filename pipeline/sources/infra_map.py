@@ -157,6 +157,34 @@ def _build_stations_geo(rdps_by_div):
     return stations
 
 
+def _looks_like_station_code(code):
+    """Station cells hold short codes ('SBC', 'KRYP  KKMI', 'E UBL',
+    'Pulikarai', 'SBC (355)'). Added 28-Nov-2026: 8 cells in the Mysuru
+    Sr.DEN/West rows were overwritten with sentences (text pasted in by
+    mistake -- the 26-Nov sync had SRVN, HAH, HPA, BLGA, NHY, PANP, AP and
+    KVE there), which then showed up on the site as fake "stations". A
+    real code is never more than a few words or ~25 characters."""
+    t = str(code or '').strip()
+    return bool(t) and len(t) <= 25 and len(t.split()) <= 3
+
+
+def sheet_issues(payload):
+    """-> [{division, srden, section, text}] for every 'SrDEN Detailed'
+    station cell that holds text instead of a station code (see
+    _looks_like_station_code). Shown on the site as "rows to correct in
+    the sheet" rather than silently dropped."""
+    out = []
+    for block in (payload or {}).get('supplementary', {}).get('SrDEN Detailed') or []:
+        div = _div_from_title(block.get('title'))
+        section = None
+        for r in list(block.get('rows') or []) + [block.get('total') or {}]:
+            section = r.get('Section (Km)') or section
+            code = str(r.get('Station') or '').strip()
+            if code and not _looks_like_station_code(code):
+                out.append(dict(division=div, srden=r.get('Sr.DEN'), section=section, text=code))
+    return out
+
+
 def _parse_srden_detailed(payload, stations_geo):
     """-> list of per-station dicts (one per physical siding/RH entry),
     decoding the live generic-block-parser's key-naming scheme for this
@@ -188,8 +216,8 @@ def _parse_srden_detailed(payload, stations_geo):
         for r in rows:
             section = r.get('Section (Km)') or section
             code = str(r.get('Station') or '').strip()
-            if not code:
-                continue
+            if not _looks_like_station_code(code):
+                continue  # blank, or text pasted into the code cell -- see sheet_issues()
             geo = _resolve_geo(code, stations_geo)
             out.append(dict(
                 division=div, srdenRaw=r.get('Sr.DEN'),
@@ -386,6 +414,16 @@ def build_infra_map(payload, rdps_by_div, supplement):
         srdenBreakdown=srden_breakdown,
         divisionRollup=division_rollup,
         divLabel=DIV_LABEL,
+        # Per-division Master Summary rows (same corrected source as the
+        # KPI tiles above) for the "By Division" cards -- added 28-Nov-2026:
+        # those cards read the live masterSummary, whose restHouse block is
+        # row-shifted (Hubballi showed the column headers "Available" /
+        # "Required" as its values).
+        summaryByDivision=dict(
+            siding=(ms.get('siding') or {}).get('byDivision') or [],
+            restHouse=(ms.get('restHouse') or {}).get('byDivision') or [],
+        ),
+        sheetIssues=sheet_issues(payload),
         tracksByDiv=tracks_by_div,
         divColor=network_map.DIV_COLOR,
     )

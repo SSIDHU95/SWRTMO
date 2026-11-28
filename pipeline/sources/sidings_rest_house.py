@@ -38,6 +38,7 @@ confirmed identical to canon_srden_word()'s own logic) - all three applied
 here, plus the srdenTable/responsibility rollups run_pipeline.py's run()
 derives from the station rows afterward.
 """
+import re
 from collections import Counter, defaultdict
 
 import pipeline_helpers as ph
@@ -48,6 +49,49 @@ TABLE = "sidings_rest_house"
 
 def fetch_payload():
     return supabase_client.fetch_latest_payload(TABLE)
+
+
+_STATUS_WORD = {'available': 'Available', 'sanctioned': 'Sanctioned', 'proposed': 'Proposed'}
+
+
+def _status_of(avail, sanc, prop):
+    if avail:
+        return 'Available'
+    if sanc:
+        return 'Sanctioned'
+    if prop:
+        return 'Proposed'
+    return None
+
+
+def stations_from_srden_detailed(payload):
+    """One station row per 'SrDEN Detailed' entry that has a siding or a
+    rest-house status, in the stationRows shape the website already uses."""
+    from sources import infra_map  # local import: infra_map imports network_map
+    as_of = None
+    for b in (payload.get('supplementary') or {}).get('SrDEN Detailed') or []:
+        m = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', b.get('title') or '')
+        if m:
+            as_of = m.group(1)
+    rows = []
+    for r in infra_map._parse_srden_detailed(payload, {}):
+        siding = _status_of(r['sidingAvailTM'] or r['sidingAvailRGM'], r['sidingSancTM'] or r['sidingSancRGM'],
+                            r['sidingPropTM'] or r['sidingPropRGM'])
+        rh = _status_of(r['rhAvail'], r['rhSanc'], r['rhProp'])
+        if not (siding or rh):
+            continue
+        rows.append(dict(
+            division=r['division'], asOf=as_of, srden=r['srdenRaw'], srdenKey=r['srdenKey'],
+            section=r['section'], station=r['station'], km=r['km'],
+            interSidingDistance=r['interSidingDistance'],
+            sidingStatus=siding, rhStatus=rh,
+            sidingType=('TM + RGM' if (r['sidingAvailTM'] or r['sidingSancTM'] or r['sidingPropTM'])
+                        and (r['sidingAvailRGM'] or r['sidingSancRGM'] or r['sidingPropRGM'])
+                        else 'RGM' if (r['sidingAvailRGM'] or r['sidingSancRGM'] or r['sidingPropRGM'])
+                        else 'TM' if siding else None),
+            remark=r['remark'], responsibility=ph.classify_infra_responsibility(r['remark']),
+        ))
+    return rows
 
 
 def extract_sidings_rest_houses(payload):
@@ -67,7 +111,17 @@ def extract_sidings_rest_houses(payload):
     construction = payload.get('construction') or []
 
     station_rows = []
-    for row in payload.get('ceTmSrDenDetail') or []:
+    ce_rows = payload.get('ceTmSrDenDetail') or []
+    if not ce_rows:
+        # 28-Nov-2026: the old "CE TM Sr DEN detail" tab no longer syncs
+        # any rows (the workbook moved to "SrDEN Detailed"), which left
+        # Stations Covered = 0, Pending - CN Units = 0, an empty Sr.DEN
+        # table and "No data" in the Pending-responsibility chart. Build
+        # the same station rows from the live 'SrDEN Detailed' tab instead
+        # (the one the Infra map already reads), keeping siding and rest
+        # house status separate, exactly as the map does.
+        station_rows = stations_from_srden_detailed(payload)
+    for row in ce_rows:
         division = row.get('division')
         srden_raw = row.get('srden')
         remark = row.get('remark')
