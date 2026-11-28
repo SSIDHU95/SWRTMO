@@ -156,6 +156,14 @@
     .brand h1{font-size:21px;} .brand .sub{font-size:11.5px;}
     .um-email{display:none;}
   }
+  /* 28-Nov-2026: header parts can never collide (see index.html). */
+  @media (min-width:761px){ .hdr-bar{grid-template-columns:minmax(0,1fr) minmax(0,auto) minmax(0,1fr);} }
+  .brand{min-width:0;}
+  .brand .sub{text-wrap:balance; max-width:640px;}
+  .asof{display:flex; flex-direction:column; line-height:1.3; white-space:nowrap;}
+  .asof .asof-l{font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#8C97AD;}
+  .asof .asof-d{font-size:13px; color:#E5E9F2; font-weight:600;}
+  @media (max-width:1180px){ .brand .sub{max-width:420px; font-size:11.5px;} }
 
   /* ---- tab nav: segmented pill bar with scroll-fade affordances
      (Principal-designer pass, 13-Oct-2026) -- CSS/typography + a small,
@@ -1606,6 +1614,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .dcard h4 .ic{display:none;}
   .dstat .l{font-size:11px; text-transform:none; letter-spacing:0; color:var(--muted); font-weight:500;}
   .dstat .v{font-weight:600; font-variant-numeric:tabular-nums;}
+  /* 28-Nov-2026: drawer stat boxes no longer spill long text (e.g. "DEN/HQ/SBC",
+     "Rs. 3,93,82,373/-", "Tender Floated — Awaiting Opening") outside their box:
+     equal-width grid that wraps to a new line on narrow drawers, and values that
+     wrap inside the box instead of overflowing it. */
+  .dstat-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:8px;}
+  .dstat{min-width:0;}
+  .dstat .v{font-size:15px; line-height:1.3; overflow-wrap:anywhere; word-break:normal; hyphens:auto;}
+  .dstat .v .pill{white-space:normal;}
   .dbreakrow .dbtitle{font-weight:600; font-size:13px;}
   .dbreakrow .dbsub{font-size:11.5px;}
   .dbreakrow .dbcount{font-weight:600;}
@@ -2131,6 +2147,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <h3>Not mapped yet</h3>
       <div class="cap">Every station below has a TM siding / rest-house entry but could not be placed on the map yet (no surveyed or approximate position on record) &mdash; keep correcting the data and these will move onto the map above.</div>
       <div id="infraMapUnplacedList"></div>
+    </div>
+    <div class="card" id="infraSheetIssuesCard" style="display:none;">
+      <h3>Rows to correct in the sheet</h3>
+      <div class="cap">In the SrDEN Detailed sheet, these Station cells hold text instead of a station code, so they are left off the map and the counts until corrected</div>
+      <div id="infraSheetIssuesList"></div>
     </div>
 
     <!-- Moved up to sit right after the map, per Shruti's 27-Nov-2026 request
@@ -4228,7 +4249,10 @@ function renderFlAgeChart(){
   const ab = DATA.fleet.ageBuckets;
   const order = ['0-10 yrs','11-20 yrs','21-30 yrs','30+ yrs'];
   svgBar(el, {
-    labels: order, series:[{label:'Machines', data:order.map(k=>ab[k]||0), color:c.palette[1]}],
+    // Horizontal (age bands on the Y axis, with values) per Shruti 28-Nov-2026,
+    // like the other category charts -- easier to read than 4 wide columns.
+    labels: order, horizontal:true, showValues:true,
+    series:[{label:'Machines', data:order.map(k=>ab[k]||0), color:c.palette[1]}],
     onBarClick:(i)=>drillMachines(`Fleet Age ${order[i]}`, 'Machines in this age band', m=>m.ageBucket===order[i])
   });
 }
@@ -5860,9 +5884,9 @@ function renderInfraKpis(){
   const sdSwr = (im && im.kpi && im.kpi.siding) || sd.swr;
   const rhSwr = (im && im.kpi && im.kpi.restHouse) || rh.swr;
   const kpis = [
-    {l:'Stations Covered', v: infra.stationRows.length, hint:'with a TM siding / rest-house entry, SWR-wide', fn:()=>openInfraSourceDrawer()},
-    {l:'TM Sidings Available', v: fmtReq(sumParts(sdSwr.available)), hint:`of ${fmtReq(sumParts(sdSwr.required))} required &bull; ${fmtReq(sumParts(sdSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(sdSwr.proposed))} proposed`, fn:()=>openInfraSourceDrawer()},
-    {l:'Rest Houses Available', v: fmtReq(sumParts(rhSwr.available)), hint:`of ${fmtReq(sumParts(rhSwr.required))} required &bull; ${fmtReq(sumParts(rhSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(rhSwr.proposed))} proposed`, fn:()=>openInfraSourceDrawer()},
+    {l:'Stations Covered', v: infra.stationRows.length, hint:'with a TM siding / rest-house entry, SWR-wide', fn:()=>openInfraCoverageDrawer()},
+    {l:'TM Sidings Available', v: fmtReq(sumParts(sdSwr.available)), hint:`of ${fmtReq(sumParts(sdSwr.required))} required &bull; ${fmtReq(sumParts(sdSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(sdSwr.proposed))} proposed`, fn:()=>openInfraFeatureDrawer('siding','available')},
+    {l:'Rest Houses Available', v: fmtReq(sumParts(rhSwr.available)), hint:`of ${fmtReq(sumParts(rhSwr.required))} required &bull; ${fmtReq(sumParts(rhSwr.sanctioned))} sanctioned, ${fmtReq(sumParts(rhSwr.proposed))} proposed`, fn:()=>openInfraFeatureDrawer('restHouse','available')},
     {l:'FY 26-27 Siding Target', v: `${st.completedCount}/${st.total}`, hint:`completed SWR-wide as of ${esc(st.completedAsOf||'—')}`, fn:()=>openInfraTargetDrawer('sidings')},
     {l:'Satellite Depots', v: satDepotVal, hint: satDepotHint, fn:()=>openInfraSatDepotKpiDrawer()},
     {l:'Pending — CN Units', v: (infra.responsibility.overall['CN (Construction Org)']||0), hint:'stations awaiting the Construction Organisation', fn:()=>openInfraRespDrawer('CN (Construction Org)', null)},
@@ -5871,13 +5895,93 @@ function renderInfraKpis(){
   Array.from(row.querySelectorAll('.kpi')).forEach((el,i)=>{ if (kpis[i].fn) el.addEventListener('click', kpis[i].fn); });
 }
 
+// ---------------------------------------------------------------------
+// KPI-tile drawers (28-Nov-2026, per Shruti: "make sure data is properly
+// linked with the top as drawer format"). Every tile now opens the data
+// behind its own number, and every station inside opens its full detail
+// with a Back link.
+// ---------------------------------------------------------------------
+function infraSummaryByDiv(kind){
+  // kind: 'siding' | 'restHouse'. Prefers the corrected Master Summary rows
+  // that also feed the KPI tiles (DATA.infraMap.summaryByDivision); the live
+  // DATA.infra.summary restHouse block is row-shifted (see infra_map.py).
+  const im = DATA.infraMap;
+  const corrected = im && im.summaryByDivision && (im.summaryByDivision[kind]||[]);
+  if (corrected && corrected.length) return corrected;
+  const infra = DATA.infra || {summary:{}};
+  return ((kind==='siding' ? infra.summary.sidings : infra.summary.restHouses) || {}).byDivision || [];
+}
+function infraFindStation(div, code){
+  const c = String(code||'').trim();
+  return findInfraStationAt(div, c) || ((DATA.infra&&DATA.infra.stationRows)||[]).find(r=>r.division===div && r.station===c) || null;
+}
+function infraOpenAnyStation(r, back){
+  if (r && r.sidingAvailTM!==undefined) openInfraMapStationDrawer(r, back);
+  else if (r) openInfraStationDrawer(r, back);
+}
+function openInfraCoverageDrawer(){
+  const infra = DATA.infra;
+  if (!infra) return;
+  const back = {label:'Back to Stations Covered', fn: openInfraCoverageDrawer};
+  const divs = ['UBL','SBC','MYS'];
+  let html = statRow([{l:'Stations', v: infra.stationRows.length}].concat(divs.map(d=>({l: DIV_LABEL[d]||d, v: infra.stationRows.filter(r=>r.division===d).length}))));
+  divs.forEach(d=>{
+    const rows = infra.srdenTable.filter(s=>s.division===d).sort((a,b)=> a.key.localeCompare(b.key));
+    html += dcard(`${DIV_LABEL[d]||d} (${d})`, 'click a Sr.DEN jurisdiction for its stations', rows.map(s=>{
+      const sa = s.sidingStatus.Available||0, ra = s.rhStatus.Available||0;
+      return breakRow(s.key, `Siding available ${sa} &bull; Rest house available ${ra}`, `${s.stations} station${s.stations===1?'':'s'}`, null, ()=>openInfraSrdenDrawer(s.key, back));
+    }).join('') || '<div class="dcap">No stations recorded.</div>');
+  });
+  openDrawer('Stations Covered', `${infra.stationRows.length} station(s) with a TM siding / rest-house entry &bull; from the SrDEN Detailed sheet &bull; as on ${esc((infra.stationRows[0]||{}).asOf||'—')}`, html);
+}
+function openInfraFeatureDrawer(kind, status){
+  const label = kind==='siding' ? 'TM / RGM Sidings' : 'Rest Houses';
+  const statuses = ['available','sanctioned','proposed'];
+  const sLabel = {available:'Available', sanctioned:'Sanctioned', proposed:'Proposed'};
+  const i = Math.max(0, statuses.indexOf(status));
+  const st = statuses[i];
+  const rows = infraSummaryByDiv(kind);
+  const back = {label:`Back to ${label} — ${sLabel[st]}`, fn: ()=>openInfraFeatureDrawer(kind, st)};
+  const tot = k => rows.reduce((s,d)=> s + (Number(sumParts(d[k]))||0), 0);
+  const navId = 'infFeat'+Math.random().toString(36).slice(2,7);
+  let html = statRow([
+    {l:'Required', v: tot('required')}, {l:'Available', v: tot('available')},
+    {l:'Sanctioned', v: tot('sanctioned')}, {l:'Proposed', v: tot('proposed')},
+  ]) + subNavHtml(navId, statuses.map(s=>`${sLabel[s]} (${tot(s)})`), i);
+  rows.forEach(d=>{
+    const codes = d[st+'Stations'] || [];
+    const body = codes.length ? codes.map(code=>{
+      const r = infraFindStation(d.division, code);
+      const sub = r ? `${esc(r.srdenRaw||r.srden||'—')} &bull; ${esc(r.section||'')}${r.remark?(' &bull; '+esc(r.remark)):''}` : 'not in the SrDEN Detailed sheet';
+      return breakRow(code, sub, '', null, r ? ()=>infraOpenAnyStation(r, back) : null);
+    }).join('') : '<div class="dcap">None.</div>';
+    html += dcard(`${DIV_LABEL[d.division]||d.division} — ${fmtReq(d[st])} ${sLabel[st].toLowerCase()}`, `${fmtReq(d.required)} required in ${fmtReq(d.stations)} stations`, body);
+    if (d.remarks && st!=='available') html += `<div class="dcap" style="white-space:pre-wrap; margin:-4px 0 12px;">${esc(d.remarks)}</div>`;
+  });
+  openDrawer(`${label} — ${sLabel[st]}`, `Master Summary sheet &bull; as on ${esc((DATA.infraMap&&DATA.infraMap.asOf)||'—')} &bull; click a station for full detail`, html);
+  wireSubNav(navId, j=>openInfraFeatureDrawer(kind, statuses[j]));
+}
+function renderInfraSheetIssues(){
+  const card = document.getElementById('infraSheetIssuesCard');
+  if (!card) return;
+  const issues = ((DATA.infraMap||{}).sheetIssues) || [];
+  if (!issues.length){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('infraSheetIssuesList').innerHTML = issues.map(x=>`
+    <div class="nm-unplaced-row">
+      <div><b>${esc(DIV_LABEL[x.division]||x.division||'—')} &bull; ${esc(x.srden||'—')} &bull; ${esc(x.section||'—')}</b>
+        <div style="color:var(--muted); font-size:11px; margin-top:2px;">Station cell contains: &ldquo;${esc(String(x.text).slice(0,140))}&rdquo;</div></div>
+      <div class="reason">Put the station code back in this cell</div>
+    </div>`).join('');
+}
+
 function renderInfraDivGrid(){
   const grid = document.getElementById('infraDivGrid');
   if (!grid) return;
   const infra = DATA.infra;
   if (!infra){ grid.innerHTML = ''; return; }
-  const sdByDiv = {}; infra.summary.sidings.byDivision.forEach(d=> sdByDiv[d.division]=d);
-  const rhByDiv = {}; infra.summary.restHouses.byDivision.forEach(d=> rhByDiv[d.division]=d);
+  const sdByDiv = {}; infraSummaryByDiv('siding').forEach(d=> sdByDiv[d.division]=d);
+  const rhByDiv = {}; infraSummaryByDiv('restHouse').forEach(d=> rhByDiv[d.division]=d);
   const divs = ['UBL','SBC','MYS'];
   grid.innerHTML = divs.map(div=>{
     const sd = sdByDiv[div]||{}, rh = rhByDiv[div]||{};
@@ -5899,11 +6003,12 @@ function renderInfraDivGrid(){
 
 function openInfraDivisionDrawer(div){
   const infra = DATA.infra;
-  const sd = infra.summary.sidings.byDivision.find(d=>d.division===div) || {};
-  const rh = infra.summary.restHouses.byDivision.find(d=>d.division===div) || {};
+  const sd = infraSummaryByDiv('siding').find(d=>d.division===div) || {};
+  const rh = infraSummaryByDiv('restHouse').find(d=>d.division===div) || {};
   const srdenRows = infra.srdenTable.filter(s=>s.division===div);
+  const backDiv = {label:`Back to ${DIV_LABEL[div]||div}`, fn: ()=>openInfraDivisionDrawer(div)};
   let html = statRow([
-    {l:'Stations covered', v: sd.stations!=null? sd.stations : '—'},
+    {l:'Siding Required', v: fmtReq(sd.required)},
     {l:'Siding Available', v: fmtReq(sd.available)},
     {l:'Siding Sanctioned', v: fmtReq(sd.sanctioned)},
     {l:'Siding Proposed', v: fmtReq(sd.proposed)},
@@ -5912,14 +6017,14 @@ function openInfraDivisionDrawer(div){
     {l:'RH Available', v: fmtReq(rh.available)},
     {l:'RH Sanctioned', v: fmtReq(rh.sanctioned)},
     {l:'RH Proposed', v: fmtReq(rh.proposed)},
-    {l:'Siding Required', v: fmtReq(sd.required)},
+    {l:'RH Required', v: fmtReq(rh.required)},
   ]);
   if (sd.remarks) html += dcard('Siding Remarks', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(sd.remarks)}</div>`);
   if (rh.remarks) html += dcard('Rest House Remarks', null, `<div class="dcap" style="white-space:pre-wrap; margin-top:0;">${esc(rh.remarks)}</div>`);
   html += infraMapSrdenCardHtml(div);
   html += dcard('Sr.DEN jurisdictions in this division', 'click one for its full station list', srdenRows.map(s=>{
     const avail = s.sidingStatus.Available||0;
-    return breakRow(s.key, `${s.stations} stations &bull; ${avail} siding-available`, s.stations, s.stations? avail/s.stations: null, ()=>openInfraSrdenDrawer(s.key));
+    return breakRow(s.key, `${s.stations} stations &bull; ${avail} siding-available`, s.stations, s.stations? avail/s.stations: null, ()=>openInfraSrdenDrawer(s.key, backDiv));
   }).join('') || '<div class="dcap">No Sr.DEN breakdown available.</div>');
   html += infraMapExecutionCardHtml(div);
   html += infraMapRhExecutionCardHtml(div);
@@ -6174,9 +6279,9 @@ function renderInfraSrdenTable(){
   Array.from(tbody.querySelectorAll('tr')).forEach(tr=> tr.addEventListener('click', ()=>openInfraSrdenDrawer(tr.dataset.k)));
 }
 
-function infraStationRowHtml(r){
+function infraStationRowHtml(r, back){
   const id = 'isr'+Math.random().toString(36).slice(2,9);
-  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openInfraStationDrawer(r)); }, 0);
+  setTimeout(()=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', ()=>openInfraStationDrawer(r, back)); }, 0);
   return `<div class="dmachine-card" id="${id}">
     <div class="dmtop"><span class="dmname">${esc(r.station)}</span><span class="dbadge ${infraStatusBadgeClass(r.sidingStatus)}">Siding: ${esc(r.sidingStatus||'—')}</span><span class="dbadge ${infraStatusBadgeClass(r.rhStatus)}">RH: ${esc(r.rhStatus||'—')}</span></div>
     <div class="dmmeta">${esc(r.division)} &bull; ${esc(r.srden||'—')} &bull; ${esc(r.section||'')}</div>
@@ -6184,24 +6289,28 @@ function infraStationRowHtml(r){
   </div>`;
 }
 
-function openInfraSrdenDrawer(key){
+function openInfraSrdenDrawer(key, back){
   const infra = DATA.infra;
   const s = infra.srdenTable.find(x=>x.key===key);
   if (!s) return;
   const rows = infra.stationRows.filter(r=>r.srdenKey===key);
-  let html = statRow([
+  const backHere = {label:`Back to ${key}`, fn: ()=>openInfraSrdenDrawer(key, back)};
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Division', v: esc(s.division)}, {l:'Stations', v: s.stations},
     {l:'Siding Available', v: s.sidingStatus.Available||0}, {l:'RH Available', v: s.rhStatus.Available||0},
   ]);
   html += dcard('Siding status breakdown', null, Object.entries(s.sidingStatus).map(([k,v])=>breakRow(k, '', v, null)).join(''));
   html += dcard('Rest House status breakdown', null, Object.entries(s.rhStatus).map(([k,v])=>breakRow(k, '', v, null)).join(''));
   if (Object.keys(s.responsibility||{}).length) html += dcard('Pending — responsibility', null, Object.entries(s.responsibility).map(([k,v])=>breakRow(k, '', v, null)).join(''));
-  html += dcard('Stations', 'click a station for full remark', rows.map(r=>infraStationRowHtml(r)).join(''));
+  html += dcard('Stations', 'click a station for full detail', rows.map(r=>infraStationRowHtml(r, backHere)).join(''));
   openDrawer(key, `${esc(s.division)} &bull; ${rows.length} stations`, html);
 }
 
-function openInfraStationDrawer(r){
-  let html = statRow([
+function openInfraStationDrawer(r, back){
+  // Prefer the map's richer station record (TM/RGM/RH split) when it exists.
+  const mr = findInfraStationAt(r.division, r.station);
+  if (mr){ openInfraMapStationDrawer(mr, back); return; }
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Division', v: esc(r.division)}, {l:'Sr.DEN', v: esc(r.srden||'—')},
     {l:'Km', v: r.km??'—'}, {l:'Inter-siding dist.', v: r.interSidingDistance??'—'},
   ]);
@@ -6253,7 +6362,8 @@ function openInfraRespDrawer(resp, div){
   const infra = DATA.infra;
   const rows = infra.stationRows.filter(r=> r.responsibility===resp && (!div || r.division===div));
   const title = div? `${resp} — ${DIV_LABEL[div]||div}` : resp;
-  const html = dcard('Stations', null, rows.map(r=>infraStationRowHtml(r)).join('') || '<div class="dcap">No stations in this category.</div>');
+  const back = {label:`Back to ${title}`, fn: ()=>openInfraRespDrawer(resp, div)};
+  const html = dcard('Stations', 'click a station for full detail', rows.map(r=>infraStationRowHtml(r, back)).join('') || '<div class="dcap">No stations in this category.</div>');
   openDrawer(title, `${rows.length} stations${div?(' in '+div):' across SWR'}`, html);
 }
 
@@ -6633,10 +6743,10 @@ function renderInfraMapFeatureFilter(){
   const sel = document.getElementById('infraMapFeatureFilter');
   if (!sel) return;
   const items = infraMapAllItems();
-  sel.innerHTML = `<option value="all">All features (${items.length})</option>`
-    + `<option value="siding">TM / RGM Siding (${infraMapFeatureCount(items,'siding')})</option>`
-    + `<option value="resthouse">Rest House (${infraMapFeatureCount(items,'resthouse')})</option>`
-    + `<option value="depot">Satellite Depot (${infraMapFeatureCount(items,'depot')})</option>`;
+  sel.innerHTML = `<option value="all">All features</option>`
+    + `<option value="siding">TM / RGM Siding</option>`
+    + `<option value="resthouse">Rest House</option>`
+    + `<option value="depot">Satellite Depot</option>`;
   sel.value = infraMapActiveFeature;
 }
 function renderInfraMapStatusFilter(){
@@ -6754,7 +6864,7 @@ function renderInfraMap(){
   wrap.style.display = '';
   const im = DATA.infraMap;
   const capEl = document.getElementById('infraMapCap');
-  if (capEl) capEl.textContent = `${im.mapStations.length} station(s) placed on the map`
+  if (capEl) capEl.innerHTML = `${im.mapStations.length} station(s) placed on the map`
     + (im.unmappedStations.length? ` &bull; ${im.unmappedStations.length} station(s) not mapped yet (see below)`:'')
     + ` &bull; ${im.depots.length} satellite depot proposal(s) &bull; as of ${esc(im.asOf||'—')}`;
 
@@ -6822,8 +6932,8 @@ function infraMapStatusBadgeHtml(label, code){
 }
 
 function infraMapYn(v){ return v? '✓' : '—'; }
-function openInfraMapStationDrawer(r){
-  let html = statRow([
+function openInfraMapStationDrawer(r, back){
+  let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Division', v: esc(DIV_LABEL[r.division]||r.division||'—')}, {l:'Sr.DEN', v: esc(r.srdenRaw||'—')},
     {l:'Section', v: esc(r.section||'—')}, {l:'Km', v: r.km??'—'},
   ]);
@@ -7107,6 +7217,7 @@ function drawInfraCharts(){
   renderInfraNote();
   renderInfraKpis();
   renderInfraMap();
+  safe('renderInfraSheetIssues', renderInfraSheetIssues);
   if (!infraAvailable()){
     const grid = document.getElementById('infraDivGrid');
     if (grid) grid.innerHTML = '<div class="emptynote">The "SWR Sidings and Rest House" workbook was not found in the latest sync — this tab will populate automatically once it is added back to the Machine Monitoring folder.</div>';
@@ -7628,7 +7739,7 @@ function openTcTenderDrawer(sno, back){
   if (!t) return;
   let html = (back ? backBtn(back.label, back.fn) : '') + statRow([
     {l:'Stage', v: esc(t.stageLabel||'—')},
-    {l:'Value', v: esc(t.value||'—')},
+    {l:'Value', v: t.valueNum!=null ? fmtRs(t.valueNum) : esc(t.value||'—')},
     {l:'Date Floated', v: esc(t.dateFloated||'—')},
     {l:'Date Opening', v: esc(t.dateOpening||'—')},
   ]);
@@ -9049,7 +9160,7 @@ function drawLiveSourcesCharts(){
 // cron comment for why). "Data as of" implied same-day currency and
 // misled Shruti into thinking a stale refresh was a bug; "Last refreshed"
 // says only what this value actually means.
-document.getElementById('asofLabel').textContent = `Last refreshed: ${DATA.meta.asOf}`;
+document.getElementById('asofLabel').innerHTML = `<span class="asof-l">Last refreshed</span><span class="asof-d">${esc(DATA.meta.asOf)}</span>`;
 
 const chartDrawers = {
   overview: drawOverviewCharts,
